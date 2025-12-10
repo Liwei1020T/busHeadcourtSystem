@@ -1,0 +1,1 @@
+now what is want are when the employee scan then staright way connect to the database as already set their information, then automatically record down the attendance for every bus. need to set the employee data and transportation route together. When scan, get their batch id, then match.
