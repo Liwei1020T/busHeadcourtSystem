@@ -1,30 +1,14 @@
 import { useState } from 'react';
-import { ScanRecord } from '../types';
-import { fetchScans } from '../api';
+import { AttendanceRecord } from '../types';
+import { fetchAttendance } from '../api';
 
 type ScanTableProps = {
   initialDate: string;
 };
 
-function DirectionBadge({ direction }: { direction: string }) {
-  const isToFactory = direction === 'to_factory';
-  
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        isToFactory
-          ? 'bg-green-100 text-green-800'
-          : 'bg-orange-100 text-orange-800'
-      }`}
-    >
-      {isToFactory ? 'To Factory' : 'From Factory'}
-    </span>
-  );
-}
-
 export default function ScanTable({ initialDate }: ScanTableProps) {
   const [date, setDate] = useState(initialDate);
-  const [scans, setScans] = useState<ScanRecord[]>([]);
+  const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +16,7 @@ export default function ScanTable({ initialDate }: ScanTableProps) {
     setDate(newDate);
     
     if (!newDate) {
-      setScans([]);
+      setRecords([]);
       return;
     }
 
@@ -40,11 +24,11 @@ export default function ScanTable({ initialDate }: ScanTableProps) {
     setError(null);
 
     try {
-      const data = await fetchScans(newDate);
-      setScans(data);
+      const data = await fetchAttendance(newDate);
+      setRecords(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load scans');
-      setScans([]);
+      setRecords([]);
     } finally {
       setLoading(false);
     }
@@ -92,23 +76,29 @@ export default function ScanTable({ initialDate }: ScanTableProps) {
                 Scan Time
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Employee ID
+                Batch ID
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Bus ID
+                Employee
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Trip Code
+                Bus
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Direction
+                Van
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Shift
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   <div className="flex justify-center items-center">
                     <svg className="animate-spin h-5 w-5 mr-2 text-primary-500" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -118,29 +108,39 @@ export default function ScanTable({ initialDate }: ScanTableProps) {
                   </div>
                 </td>
               </tr>
-            ) : scans.length === 0 ? (
+            ) : records.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   {date ? 'No scans found for this date.' : 'Select a date to view scans.'}
                 </td>
               </tr>
             ) : (
-              scans.map((scan, index) => (
-                <tr key={`${scan.scan_time}-${scan.employee_id}-${index}`} className="hover:bg-gray-50">
+              records.map((record, index) => (
+                <tr key={`${record.scanned_at}-${record.batch_id}-${index}`} className="hover:bg-gray-50">
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-900">
-                    {formatTime(scan.scan_time)}
+                    {formatTime(record.scanned_at)}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {scan.employee_id}
+                    {record.batch_id}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {scan.bus_id}
+                    {record.employee_name || '-'}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
-                    {scan.trip_code}
+                    {record.bus_id || '-'}
                   </td>
                   <td className="px-6 py-3 whitespace-nowrap">
-                    <DirectionBadge direction={scan.direction} />
+                    {record.van_id ?? '-'}
+                  </td>
+                  <td className="px-6 py-3 whitespace-nowrap">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      {record.shift}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.status === 'present' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                      {record.status}
+                    </span>
                   </td>
                 </tr>
               ))
@@ -149,9 +149,9 @@ export default function ScanTable({ initialDate }: ScanTableProps) {
         </table>
       </div>
 
-      {scans.length > 0 && (
+      {records.length > 0 && (
         <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-500">
-          Showing {scans.length} scan(s)
+          Showing {records.length} attendance record(s)
         </div>
       )}
     </div>

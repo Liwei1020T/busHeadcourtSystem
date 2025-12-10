@@ -27,12 +27,8 @@ def init_db() -> None:
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS scans (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            bus_id       TEXT NOT NULL,
-            trip_date    TEXT NOT NULL,
-            trip_code    TEXT NOT NULL,
-            direction    TEXT NOT NULL,
-            employee_id  TEXT NOT NULL,
-            card_uid     TEXT NOT NULL,
+            batch_id     INTEGER NOT NULL,
+            card_uid     TEXT,
             scan_time    TEXT NOT NULL,
             uploaded     INTEGER DEFAULT 0
         )
@@ -47,7 +43,7 @@ def init_db() -> None:
     # Create unique index for deduplication
     cursor.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_scans_unique 
-        ON scans(bus_id, trip_date, trip_code, employee_id)
+        ON scans(batch_id, scan_time)
     """)
     
     conn.commit()
@@ -56,11 +52,7 @@ def init_db() -> None:
 
 
 def insert_scan(
-    bus_id: str,
-    trip_date: str,
-    trip_code: str,
-    direction: str,
-    employee_id: str,
+    batch_id: int,
     card_uid: str,
     scan_time: str
 ) -> bool:
@@ -73,15 +65,15 @@ def insert_scan(
     
     try:
         cursor.execute("""
-            INSERT INTO scans (bus_id, trip_date, trip_code, direction, employee_id, card_uid, scan_time, uploaded)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-        """, (bus_id, trip_date, trip_code, direction, employee_id, card_uid, scan_time))
+            INSERT INTO scans (batch_id, card_uid, scan_time, uploaded)
+            VALUES (?, ?, ?, 0)
+        """, (batch_id, card_uid, scan_time))
         conn.commit()
-        logger.info(f"Scan inserted: employee={employee_id}, trip={trip_code}")
+        logger.info(f"Scan inserted: batch_id={batch_id}")
         return True
     except sqlite3.IntegrityError:
-        # Duplicate scan - same employee already scanned for this trip
-        logger.debug(f"Duplicate scan ignored: employee={employee_id}, trip={trip_code}")
+        # Duplicate scan - same batch/timestamp
+        logger.debug(f"Duplicate scan ignored: batch_id={batch_id} at {scan_time}")
         return False
     finally:
         conn.close()
@@ -96,7 +88,7 @@ def get_unuploaded_scans(limit: int = 200) -> List[Dict]:
     cursor = conn.cursor()
     
     cursor.execute("""
-        SELECT id, bus_id, trip_date, trip_code, direction, employee_id, card_uid, scan_time
+        SELECT id, batch_id, card_uid, scan_time
         FROM scans
         WHERE uploaded = 0
         ORDER BY id ASC
@@ -110,11 +102,7 @@ def get_unuploaded_scans(limit: int = 200) -> List[Dict]:
     for row in rows:
         result.append({
             "id": row["id"],
-            "bus_id": row["bus_id"],
-            "trip_date": row["trip_date"],
-            "trip_code": row["trip_code"],
-            "direction": row["direction"],
-            "employee_id": row["employee_id"],
+            "batch_id": row["batch_id"],
             "card_uid": row["card_uid"],
             "scan_time": row["scan_time"]
         })

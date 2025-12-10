@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     # Default to SQLite for easy local development
     database_url: str = "sqlite:///./bus_optimizer.db"
     
-    # API Keys configuration (format: "BUS_ID1:KEY1,BUS_ID2:KEY2")
-    api_keys: str = "BUS_SP_01:BUS_SP_01_SECRET,BUS_KL_01:BUS_KL_01_SECRET"
+    # API Keys configuration (format: "LABEL1:KEY1,LABEL2:KEY2")
+    api_keys: str = "ENTRY_GATE:ENTRY_SECRET"
     
     # Application settings
     app_name: str = "Bus Optimizer API"

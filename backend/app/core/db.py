@@ -43,13 +43,13 @@ def get_db() -> Generator[Session, None, None]:
 def create_tables() -> None:
     """Create all database tables."""
     # Import all models to ensure they are registered
-    from app.models import bus, trip, scan  # noqa
+    from app.models import bus, van, employee, attendance  # noqa
     Base.metadata.create_all(bind=engine)
     print("Database tables created successfully")
 
 
 def drop_tables() -> None:
     """Drop all database tables (use with caution)."""
-    from app.models import bus, trip, scan  # noqa
+    from app.models import bus, van, employee, attendance  # noqa
     Base.metadata.drop_all(bind=engine)
     print("Database tables dropped")

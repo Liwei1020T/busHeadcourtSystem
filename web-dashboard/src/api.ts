@@ -2,42 +2,47 @@
  * API service for communicating with the backend.
  */
 
-import { SummaryResponse, ScanRecord, FilterParams } from './types';
+import { HeadcountResponse, AttendanceRecord, FilterParams } from './types';
 
 const API_BASE = '/api';
 
 /**
- * Fetch summary report with optional filters.
+ * Fetch headcount with optional filters.
  */
-export async function fetchSummary(params: Partial<FilterParams>): Promise<SummaryResponse> {
+export async function fetchHeadcount(params: Partial<FilterParams>): Promise<HeadcountResponse> {
   const searchParams = new URLSearchParams();
   
   if (params.date_from) searchParams.append('date_from', params.date_from);
   if (params.date_to) searchParams.append('date_to', params.date_to);
-  if (params.route) searchParams.append('route', params.route);
-  if (params.direction) searchParams.append('direction', params.direction);
+  if (params.shift) searchParams.append('shift', params.shift);
+  if (params.bus_id) searchParams.append('bus_id', params.bus_id);
   
-  const url = `${API_BASE}/report/summary?${searchParams.toString()}`;
+  const url = `${API_BASE}/report/headcount?${searchParams.toString()}`;
   
   const response = await fetch(url);
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch summary: ${response.statusText}`);
+    throw new Error(`Failed to fetch headcount: ${response.statusText}`);
   }
   
   return response.json();
 }
 
 /**
- * Fetch scan records for a specific date.
+ * Fetch attendance records for a specific date with optional filters.
  */
-export async function fetchScans(date: string): Promise<ScanRecord[]> {
-  const url = `${API_BASE}/report/scans?date=${encodeURIComponent(date)}`;
+export async function fetchAttendance(date: string, shift?: string, bus_id?: string): Promise<AttendanceRecord[]> {
+  const searchParams = new URLSearchParams();
+  searchParams.append('date', date);
+  if (shift) searchParams.append('shift', shift);
+  if (bus_id) searchParams.append('bus_id', bus_id);
+
+  const url = `${API_BASE}/report/attendance?${searchParams.toString()}`;
   
   const response = await fetch(url);
   
   if (!response.ok) {
-    throw new Error(`Failed to fetch scans: ${response.statusText}`);
+    throw new Error(`Failed to fetch attendance: ${response.statusText}`);
   }
   
   return response.json();

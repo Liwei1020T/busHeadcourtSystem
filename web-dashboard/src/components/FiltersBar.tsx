@@ -7,29 +7,12 @@ type FiltersBarProps = {
   onReset: () => void;
   loading: boolean;
   availableBuses: string[];
-  availableTripCodes: string[];
 };
 
-const ROUTES = [
-  { value: '', label: 'All Routes' },
-  { value: 'SP', label: 'SP to Factory' },
-  { value: 'Kulim', label: 'Kulim to Factory' },
-  { value: 'Penang', label: 'Penang to Factory' },
-];
-
-const DIRECTIONS = [
-  { value: '', label: 'All Directions' },
-  { value: 'to_factory', label: 'To Factory' },
-  { value: 'from_factory', label: 'From Factory' },
-];
-
-const LOAD_FACTOR_OPTIONS = [
-  { value: '', label: 'Any' },
-  { value: '0', label: '0%' },
-  { value: '0.25', label: '25%' },
-  { value: '0.5', label: '50%' },
-  { value: '0.75', label: '75%' },
-  { value: '1', label: '100%' },
+const SHIFTS = [
+  { value: '', label: 'All Shifts' },
+  { value: 'morning', label: 'Morning (04:00-10:00)' },
+  { value: 'night', label: 'Night (16:00-21:00)' },
 ];
 
 export default function FiltersBar({ 
@@ -38,8 +21,7 @@ export default function FiltersBar({
   onSearch, 
   onReset,
   loading,
-  availableBuses,
-  availableTripCodes 
+  availableBuses
 }: FiltersBarProps) {
   const handleChange = (field: keyof FilterParams, value: string) => {
     onFiltersChange({
@@ -48,8 +30,7 @@ export default function FiltersBar({
     });
   };
 
-  const hasActiveFilters = filters.route || filters.direction || filters.bus_id || 
-    filters.trip_code || filters.load_factor_min || filters.load_factor_max;
+  const hasActiveFilters = Boolean(filters.shift || filters.bus_id);
 
   return (
     <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -81,37 +62,19 @@ export default function FiltersBar({
           />
         </div>
 
-        {/* Route Select */}
-        <div className="flex-1 min-w-[140px]">
+        {/* Shift Select */}
+        <div className="flex-1 min-w-[160px]">
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Route
+            Shift
           </label>
           <select
-            value={filters.route}
-            onChange={(e) => handleChange('route', e.target.value)}
+            value={filters.shift}
+            onChange={(e) => handleChange('shift', e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           >
-            {ROUTES.map((route) => (
-              <option key={route.value} value={route.value}>
-                {route.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Direction Select */}
-        <div className="flex-1 min-w-[140px]">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Direction
-          </label>
-          <select
-            value={filters.direction}
-            onChange={(e) => handleChange('direction', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          >
-            {DIRECTIONS.map((dir) => (
-              <option key={dir.value} value={dir.value}>
-                {dir.label}
+            {SHIFTS.map((shift) => (
+              <option key={shift.value} value={shift.value}>
+                {shift.label}
               </option>
             ))}
           </select>
@@ -151,61 +114,6 @@ export default function FiltersBar({
             </select>
           </div>
 
-          {/* Trip Code Select */}
-          <div className="flex-1 min-w-[130px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Trip Code
-            </label>
-            <select
-              value={filters.trip_code}
-              onChange={(e) => handleChange('trip_code', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">All Trips</option>
-              {availableTripCodes.map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Load Factor Min */}
-          <div className="flex-1 min-w-[120px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Load Factor Min
-            </label>
-            <select
-              value={filters.load_factor_min}
-              onChange={(e) => handleChange('load_factor_min', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              {LOAD_FACTOR_OPTIONS.map((opt) => (
-                <option key={`min-${opt.value}`} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Load Factor Max */}
-          <div className="flex-1 min-w-[120px]">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Load Factor Max
-            </label>
-            <select
-              value={filters.load_factor_max}
-              onChange={(e) => handleChange('load_factor_max', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            >
-              {LOAD_FACTOR_OPTIONS.map((opt) => (
-                <option key={`max-${opt.value}`} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Reset Button */}
           <div>
             <button
@@ -228,14 +136,9 @@ export default function FiltersBar({
         <div className="mt-3 pt-3 border-t border-gray-100">
           <div className="flex flex-wrap gap-2 items-center">
             <span className="text-sm text-gray-500">Active filters:</span>
-            {filters.route && (
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                Route: {filters.route}
-              </span>
-            )}
-            {filters.direction && (
+            {filters.shift && (
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                {filters.direction === 'to_factory' ? 'To Factory' : 'From Factory'}
+                Shift: {filters.shift}
               </span>
             )}
             {filters.bus_id && (
@@ -243,14 +146,9 @@ export default function FiltersBar({
                 Bus: {filters.bus_id}
               </span>
             )}
-            {filters.trip_code && (
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                Trip: {filters.trip_code}
-              </span>
-            )}
-            {(filters.load_factor_min || filters.load_factor_max) && (
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                Load: {filters.load_factor_min ? `${Number(filters.load_factor_min) * 100}%` : '0%'} - {filters.load_factor_max ? `${Number(filters.load_factor_max) * 100}%` : '100%'}
+            {(filters.date_from || filters.date_to) && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                Dates: {filters.date_from || 'Any'} → {filters.date_to || 'Any'}
               </span>
             )}
           </div>

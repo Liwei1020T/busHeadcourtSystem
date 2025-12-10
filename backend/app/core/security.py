@@ -11,10 +11,7 @@ from app.core.config import get_api_keys_map
 def validate_api_key(x_api_key: Optional[str] = Header(None)) -> str:
     """
     Validate the API key from request header.
-    Returns the bus_id associated with the API key.
-    
-    Raises:
-        HTTPException: If API key is missing or invalid.
+    Returns the key label (e.g., ENTRY_GATE) associated with the API key.
     """
     if not x_api_key:
         raise HTTPException(
@@ -24,10 +21,10 @@ def validate_api_key(x_api_key: Optional[str] = Header(None)) -> str:
     
     api_keys = get_api_keys_map()
     
-    # Find the bus_id for this API key
-    for bus_id, key in api_keys.items():
+    # Find the label for this API key
+    for label, key in api_keys.items():
         if key == x_api_key:
-            return bus_id
+            return label
     
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -35,15 +32,15 @@ def validate_api_key(x_api_key: Optional[str] = Header(None)) -> str:
     )
 
 
-def get_bus_id_from_api_key(x_api_key: str) -> Optional[str]:
+def get_label_from_api_key(x_api_key: str) -> Optional[str]:
     """
-    Get the bus_id associated with an API key without raising exceptions.
+    Get the key label associated with an API key without raising exceptions.
     Returns None if the API key is invalid.
     """
     api_keys = get_api_keys_map()
     
-    for bus_id, key in api_keys.items():
+    for label, key in api_keys.items():
         if key == x_api_key:
-            return bus_id
+            return label
     
     return None

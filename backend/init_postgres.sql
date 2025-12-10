@@ -9,82 +9,113 @@
 -- CREATE DATABASE bus_optimizer;
 -- \c bus_optimizer;
 
--- Clean existing objects for repeatable runs
-DROP VIEW IF EXISTS trip_summary;
-DROP TABLE IF EXISTS trip_scans CASCADE;
-DROP TABLE IF EXISTS trips CASCADE;
+-- Use Kuala Lumpur time for generated dates
+SET TIME ZONE 'Asia/Kuala_Lumpur';
+
+-- Legacy helper: if you need to keep data and only convert batch_id to INTEGER,
+-- uncomment and run the block below, then skip the DROP statements.
+-- DO $$
+-- BEGIN
+--   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='batch_id') THEN
+--     ALTER TABLE employees ALTER COLUMN batch_id TYPE INTEGER USING batch_id::integer;
+--   END IF;
+--   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='attendances' AND column_name='scanned_batch_id') THEN
+--     ALTER TABLE attendances ALTER COLUMN scanned_batch_id TYPE INTEGER USING scanned_batch_id::integer;
+--   END IF;
+-- END $$;
+
+-- Clean existing objects for repeatable runs (drops data)
+DROP TABLE IF EXISTS attendances CASCADE;
+DROP TABLE IF EXISTS employees CASCADE;
+DROP TABLE IF EXISTS vans CASCADE;
 DROP TABLE IF EXISTS buses CASCADE;
+DROP TYPE IF EXISTS attendance_shift;
+
+-- ------------------------------------------------------------
+-- Enum: attendance_shift
+-- ------------------------------------------------------------
+CREATE TYPE attendance_shift AS ENUM ('morning', 'night', 'unknown');
 
 -- ------------------------------------------------------------
 -- Table: buses
 -- ------------------------------------------------------------
 CREATE TABLE buses (
-    bus_id        VARCHAR(50) PRIMARY KEY,
-    plate_number  VARCHAR(50),
-    route_name    VARCHAR(100),
-    capacity      INTEGER DEFAULT 40
+    bus_id       VARCHAR(10) PRIMARY KEY,
+    route        TEXT NOT NULL,
+    plate_number VARCHAR(50),
+    capacity     INTEGER DEFAULT 40 CHECK (capacity > 0),
+    CHECK (char_length(bus_id) <= 4)
 );
 
 -- ------------------------------------------------------------
--- Table: trips
--- One row per bus per date per trip_code
+-- Table: vans
+-- A bus can have multiple vans that ferry employees to the bus
 -- ------------------------------------------------------------
-CREATE TABLE trips (
-    trip_id      SERIAL PRIMARY KEY,
-    bus_id       VARCHAR(50) NOT NULL REFERENCES buses(bus_id) ON DELETE CASCADE,
-    trip_date    DATE NOT NULL,
-    trip_code    VARCHAR(50) NOT NULL,
-    direction    VARCHAR(20) NOT NULL CHECK (direction IN ('to_factory', 'from_factory')),
-    planned_time TIME,
-    actual_time  TIMESTAMP,
-    CONSTRAINT uq_bus_date_trip UNIQUE (bus_id, trip_date, trip_code)
-);
-
-CREATE INDEX idx_trips_date ON trips(trip_date);
-CREATE INDEX idx_trips_bus_id ON trips(bus_id);
-
--- ------------------------------------------------------------
--- Table: trip_scans
--- Individual employee scans per trip
--- ------------------------------------------------------------
-CREATE TABLE trip_scans (
+CREATE TABLE vans (
     id           SERIAL PRIMARY KEY,
-    trip_id      INTEGER NOT NULL REFERENCES trips(trip_id) ON DELETE CASCADE,
-    employee_id  VARCHAR(50) NOT NULL,
-    scan_time    TIMESTAMP NOT NULL,
-    CONSTRAINT uq_trip_employee UNIQUE (trip_id, employee_id)
+    van_code     VARCHAR(20) UNIQUE NOT NULL,
+    bus_id       VARCHAR(10) NOT NULL REFERENCES buses(bus_id) ON DELETE CASCADE,
+    plate_number VARCHAR(50),
+    driver_name  VARCHAR(100),
+    capacity     INTEGER,
+    active       BOOLEAN DEFAULT TRUE
 );
 
-CREATE INDEX idx_trip_scans_trip_id ON trip_scans(trip_id);
-CREATE INDEX idx_trip_scans_employee_id ON trip_scans(employee_id);
+CREATE INDEX idx_vans_bus_id ON vans(bus_id);
 
 -- ------------------------------------------------------------
--- View: trip_summary
--- Aggregated trip metrics for reporting
+-- Table: employees
 -- ------------------------------------------------------------
-CREATE OR REPLACE VIEW trip_summary AS
-SELECT
-    t.trip_id,
-    t.trip_date,
-    t.trip_code,
-    t.bus_id,
-    b.route_name,
-    t.direction,
-    b.capacity,
-    COUNT(ts.id) AS passenger_count,
-    ROUND(COUNT(ts.id)::NUMERIC / NULLIF(b.capacity, 0), 3) AS load_factor
-FROM trips t
-LEFT JOIN buses b ON t.bus_id = b.bus_id
-LEFT JOIN trip_scans ts ON t.trip_id = ts.trip_id
-GROUP BY t.trip_id, t.trip_date, t.trip_code, t.bus_id, b.route_name, t.direction, b.capacity
-ORDER BY t.trip_date DESC, t.trip_code;
+CREATE TABLE employees (
+    id        SERIAL PRIMARY KEY,
+    batch_id  INTEGER UNIQUE NOT NULL CHECK (batch_id > 0),
+    name      VARCHAR(100) NOT NULL,
+    bus_id    VARCHAR(10) NOT NULL REFERENCES buses(bus_id) ON DELETE RESTRICT,
+    van_id    INTEGER REFERENCES vans(id),
+    active    BOOLEAN DEFAULT TRUE
+);
+
+CREATE INDEX idx_employees_bus_id ON employees(bus_id);
+CREATE INDEX idx_employees_van_id ON employees(van_id);
 
 -- ------------------------------------------------------------
--- Seed data: initial buses (safe to re-run)
+-- Table: attendances
+-- One row per scan; shift derived from Kuala Lumpur local time
 -- ------------------------------------------------------------
-INSERT INTO buses (bus_id, plate_number, route_name, capacity) VALUES
-    ('BUS_SP_01', 'WPL 1234', 'SP to Factory', 40),
-    ('BUS_SP_02', 'WPL 1235', 'SP to Factory', 40),
-    ('BUS_KL_01', 'WKL 5678', 'Kulim to Factory', 45),
-    ('BUS_PG_01', 'PNG 9012', 'Penang to Factory', 50)
+CREATE TABLE attendances (
+    id               BIGSERIAL PRIMARY KEY,
+    scanned_batch_id INTEGER NOT NULL CHECK (scanned_batch_id > 0),
+    employee_id      INTEGER REFERENCES employees(id),
+    bus_id           VARCHAR(10) REFERENCES buses(bus_id),
+    van_id           INTEGER REFERENCES vans(id),
+    shift            attendance_shift NOT NULL DEFAULT 'unknown',
+    status           VARCHAR(30) NOT NULL CHECK (status IN ('present', 'unknown_batch', 'unknown_shift')),
+    scanned_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    scanned_on       DATE NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kuala_Lumpur')::date),
+    source           VARCHAR(50)
+);
+
+CREATE UNIQUE INDEX uq_attendance_batch_date_shift
+    ON attendances (scanned_batch_id, scanned_on, shift);
+CREATE INDEX idx_attendances_bus_shift_date
+    ON attendances (bus_id, shift, scanned_on);
+CREATE INDEX idx_attendances_scanned_on
+    ON attendances (scanned_on);
+
+-- ------------------------------------------------------------
+-- Seed data: initial buses, vans, and employees (safe to re-run)
+-- ------------------------------------------------------------
+INSERT INTO buses (bus_id, route, plate_number, capacity) VALUES
+    ('A01', 'Route A (Inbound)', 'WPL 1234', 40),
+    ('B02', 'Route B (Outbound)', 'WKL 5678', 45)
 ON CONFLICT (bus_id) DO NOTHING;
+
+INSERT INTO vans (van_code, bus_id, plate_number, driver_name, capacity) VALUES
+    ('VAN_A1', 'A01', 'VAN 1001', 'Ali', 12),
+    ('VAN_B1', 'B02', 'VAN 2001', 'Bala', 12)
+ON CONFLICT (van_code) DO NOTHING;
+
+INSERT INTO employees (batch_id, name, bus_id, van_id) VALUES
+    (1001, 'Employee One', 'A01', (SELECT id FROM vans WHERE van_code='VAN_A1')),
+    (1002, 'Employee Two', 'B02', (SELECT id FROM vans WHERE van_code='VAN_B1'))
+ON CONFLICT (batch_id) DO NOTHING;

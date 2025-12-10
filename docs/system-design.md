@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Bus Passenger Counting & Optimization System is designed to track employee bus ridership at a factory facility. The system helps management make data-driven decisions about bus fleet optimization and cost reduction.
+The Bus Optimizer now tracks employee attendance by shift (morning/night) per bus, with batch-ID scans, van-to-bus assignments, and headcount reporting. Routes are stored inline on buses, shifts are derived in Kuala Lumpur time, and unknown batch/shift scans are logged for investigation. Scanners now sit at the factory entry (not per-bus), and bus assignment is taken from the employee record. The goal remains to give management accurate ridership and headcount visibility for optimization.
 
 ## Architecture
 
@@ -21,22 +21,21 @@ The Bus Passenger Counting & Optimization System is designed to track employee b
 
 ## Data Flow
 
-1. **Card Scan**: Employee taps card on bus reader
-2. **Local Storage**: Pi agent stores scan in local SQLite (offline support)
-3. **Upload**: When connected to factory Wi-Fi, Pi uploads pending scans
-4. **Processing**: Backend deduplicates and stores in PostgreSQL
-5. **Reporting**: Dashboard queries backend for summaries and details
+1. **Card Scan**: Employee batch ID is scanned at the factory entry scanner.
+2. **Local Storage**: Pi agent stores scan in local SQLite (offline support).
+3. **Upload**: When connected, Pi uploads pending scans to the backend.
+4. **Processing**: Backend validates the entry API key, derives shift from KL local time (morning 04:00–10:00, night 16:00–21:00, otherwise unknown), resolves employee/bus/van, deduplicates per batch+date+shift, and stores attendance in PostgreSQL. Unknown batch/shift scans are recorded.
+5. **Reporting**: Dashboard queries headcount and attendance detail with filters by date, shift, and bus; admin can manage buses, vans, and employees.
 
 ## Components
 
 ### 1. Pi Agent (Raspberry Pi)
 
 **Responsibilities:**
-- Read employee cards via card reader
-- Determine current trip based on time windows
+- Read employee batch IDs via card reader at factory entry
 - Store scans locally with offline support
 - Upload to backend when network available
-- Deduplicate scans (same employee + trip = 1 count)
+- Backend derives shift and dedupes per batch+date+shift; bus assignment comes from employee records
 
 **Technology:**
 - Python 3.9+
@@ -45,15 +44,17 @@ The Bus Passenger Counting & Optimization System is designed to track employee b
 
 **Key Features:**
 - Offline-first design
-- Automatic trip detection by time
+- Lightweight payload: `{id, bus_id, batch_id, scan_time}`
 - Configurable via JSON file
 
 ### 2. Backend API (FastAPI)
 
 **Responsibilities:**
 - Receive and validate scans from Pi agents
-- Store data in central PostgreSQL database
-- Provide reporting APIs for dashboard
+- Derive shifts by Kuala Lumpur time and categorize unknown shifts
+- Resolve employees/buses/vans and store attendance
+- Provide headcount/attendance reporting for the dashboard
+- Manage buses, vans, employees
 - API key authentication per bus
 
 **Technology:**
@@ -63,17 +64,19 @@ The Bus Passenger Counting & Optimization System is designed to track employee b
 - Uvicorn ASGI server
 
 **API Endpoints:**
-- `POST /api/bus/upload-scans` - Receive batch scans
-- `GET /api/report/summary` - Trip summaries with KPIs
-- `GET /api/report/scans` - Individual scan records
+- `POST /api/bus/upload-scans` - Receive batch scans from entry scanners (batch_id-based; no bus_id in payload)
+- `GET /api/bus/buses` / `POST /api/bus/buses` - List/upsert buses
+- `GET /api/bus/vans` - List vans (bus assignment)
+- `GET /api/bus/employees` / `POST /api/bus/employees` - List/upsert employees (batch_id, bus_id, van_id)
+- `GET /api/report/headcount` - Per-bus headcount aggregated by date/shift
+- `GET /api/report/attendance` - Detailed attendance records with filters
 
 ### 3. Web Dashboard (React)
 
 **Responsibilities:**
-- Display passenger statistics
-- Show trip load factors
-- Filter by date, route, direction
-- Visualize optimization opportunities
+- Display headcount per bus/shift/date
+- Filter by date, shift, and bus; view attendance detail
+- Manage buses, vans, employees (batch IDs, assignments)
 
 **Technology:**
 - React + TypeScript
@@ -81,9 +84,9 @@ The Bus Passenger Counting & Optimization System is designed to track employee b
 - Vite build tool
 
 **Key Views:**
-- KPI cards (total passengers, avg load, trip count)
-- Trip summary table
-- Scan details table
+- Headcount table/cards (present, unknown batch/shift)
+- Attendance detail table (scans)
+- Admin tables for buses, vans, employees
 
 ## Database Schema
 
@@ -91,27 +94,39 @@ The Bus Passenger Counting & Optimization System is designed to track employee b
 
 ```
 buses
-├── bus_id (PK)
+├── bus_id (PK, <=4 chars, e.g., A02)
+├── route (text, inline)
 ├── plate_number
-├── route_name
 └── capacity
 
-trips
-├── trip_id (PK)
-├── bus_id (FK)
-├── trip_date
-├── trip_code
-├── direction
-├── planned_time
-└── actual_time
-└── UNIQUE(bus_id, trip_date, trip_code)
-
-trip_scans
+vans
 ├── id (PK)
-├── trip_id (FK)
-├── employee_id
-├── scan_time
-└── UNIQUE(trip_id, employee_id)
+├── van_code (unique)
+├── bus_id (FK -> buses)
+├── plate_number
+├── driver_name
+├── capacity
+└── active
+
+employees
+├── id (PK)
+├── batch_id (unique, scannable)
+├── name
+├── bus_id (FK -> buses)
+├── van_id (FK -> vans, nullable)
+└── active
+
+attendances
+├── id (PK)
+├── scanned_batch_id
+├── employee_id (FK -> employees, nullable)
+├── bus_id (FK -> buses, nullable)
+├── van_id (FK -> vans, nullable)
+├── shift (enum: morning/night/unknown, derived by KL time)
+├── status (present/unknown_batch/unknown_shift)
+├── scanned_at (timestamptz)
+├── scanned_on (date, KL)
+└── UNIQUE(scanned_batch_id, scanned_on, shift)
 ```
 
 ### Local Database (SQLite on Pi)
@@ -120,18 +135,15 @@ trip_scans
 scans
 ├── id (PK)
 ├── bus_id
-├── trip_date
-├── trip_code
-├── direction
-├── employee_id
-├── card_uid
+├── batch_id
+├── card_uid (optional)
 ├── scan_time
 └── uploaded (0/1)
 ```
 
 ## Security
 
-- Each bus has a unique API key
+- Entry scanners use shared API keys (labeled, not bus-specific)
 - API keys validated via X-API-KEY header
 - Keys stored as environment variables on backend
 - Internal network only (no public exposure)
@@ -151,8 +163,8 @@ scans
 
 ## Future Enhancements
 
-1. Employee ID mapping (card UID to employee name)
+1. Card UID to batch-ID resolution service on the backend (instead of Pi mapping)
 2. Real-time charts and analytics
 3. Mobile companion app
 4. Automated route optimization suggestions
-5. Integration with HR systems
+5. Integration with HR systems and roster imports

@@ -1,7 +1,8 @@
 """Models module exports."""
 
 from app.models.bus import Bus
-from app.models.trip import Trip
-from app.models.scan import TripScan
+from app.models.van import Van
+from app.models.employee import Employee
+from app.models.attendance import Attendance, AttendanceShift
 
-__all__ = ["Bus", "Trip", "TripScan"]
+__all__ = ["Bus", "Van", "Employee", "Attendance", "AttendanceShift"]

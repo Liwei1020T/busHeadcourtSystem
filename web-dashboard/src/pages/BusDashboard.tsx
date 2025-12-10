@@ -3,8 +3,8 @@ import FiltersBar from '../components/FiltersBar';
 import KpiCard from '../components/KpiCard';
 import TripTable from '../components/TripTable';
 import ScanTable from '../components/ScanTable';
-import { fetchSummary } from '../api';
-import { SummaryResponse, FilterParams, TripSummary } from '../types';
+import { fetchHeadcount } from '../api';
+import { HeadcountResponse, FilterParams } from '../types';
 
 // Get today's date in YYYY-MM-DD format
 function getTodayString(): string {
@@ -19,28 +19,12 @@ function getWeekAgoString(): string {
   return date.toISOString().split('T')[0];
 }
 
-// Format currency
-function formatCurrency(value: number | null): string {
-  if (value === null) return '-';
-  return `RM ${value.toLocaleString('en-MY', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-}
-
-// Format percentage
-function formatPercentage(value: number | null): string {
-  if (value === null) return '-';
-  return `${(value * 100).toFixed(1)}%`;
-}
-
 // Initial filter state
 const getInitialFilters = (): FilterParams => ({
   date_from: getWeekAgoString(),
   date_to: getTodayString(),
-  route: '',
-  direction: '',
+  shift: '',
   bus_id: '',
-  trip_code: '',
-  load_factor_min: '',
-  load_factor_max: '',
 });
 
 export default function BusDashboard() {
@@ -51,88 +35,53 @@ export default function BusDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const [summary, setSummary] = useState<SummaryResponse>({
-    total_passengers: null,
-    avg_load_factor: null,
-    trip_count: null,
-    saving_estimate: null,
-    trips: [],
+  const [headcount, setHeadcount] = useState<HeadcountResponse>({
+    rows: [],
   });
 
-  // Extract unique buses and trip codes from data for filter dropdowns
+  // Extract unique buses from data for filter dropdowns
   const availableBuses = useMemo(() => {
-    const buses = new Set(summary.trips.map(t => t.bus_id));
+    const buses = new Set(headcount.rows.map(t => t.bus_id).filter(Boolean));
     return Array.from(buses).sort();
-  }, [summary.trips]);
+  }, [headcount.rows]);
 
-  const availableTripCodes = useMemo(() => {
-    const codes = new Set(summary.trips.map(t => t.trip_code));
-    return Array.from(codes).sort();
-  }, [summary.trips]);
-
-  // Apply local filters to trips (for filters not supported by API)
-  const filteredTrips = useMemo(() => {
-    let trips = summary.trips;
-
-    // Filter by bus_id
+  // Apply local filters (bus only - shift/date handled server-side)
+  const filteredRows = useMemo(() => {
+    let rows = headcount.rows;
     if (filters.bus_id) {
-      trips = trips.filter(t => t.bus_id === filters.bus_id);
+      rows = rows.filter(t => t.bus_id === filters.bus_id);
     }
+    return rows;
+  }, [headcount.rows, filters.bus_id]);
 
-    // Filter by trip_code
-    if (filters.trip_code) {
-      trips = trips.filter(t => t.trip_code === filters.trip_code);
-    }
-
-    // Filter by load_factor_min
-    if (filters.load_factor_min) {
-      const minLoad = parseFloat(filters.load_factor_min);
-      trips = trips.filter(t => (t.load_factor ?? 0) >= minLoad);
-    }
-
-    // Filter by load_factor_max
-    if (filters.load_factor_max) {
-      const maxLoad = parseFloat(filters.load_factor_max);
-      trips = trips.filter(t => (t.load_factor ?? 0) <= maxLoad);
-    }
-
-    return trips;
-  }, [summary.trips, filters.bus_id, filters.trip_code, filters.load_factor_min, filters.load_factor_max]);
-
-  // Calculate KPIs from filtered trips
+  // Calculate KPIs from filtered rows
   const filteredKpis = useMemo(() => {
-    if (filteredTrips.length === 0) {
+    if (filteredRows.length === 0) {
       return {
-        total_passengers: 0,
-        avg_load_factor: null,
-        trip_count: 0,
-        saving_estimate: 0,
+        total_present: 0,
+        total_unknown_batch: 0,
+        total_unknown_shift: 0,
+        row_count: 0,
       };
     }
 
-    let totalPassengers = 0;
-    let totalLoadFactor = 0;
-    let validLoadFactors = 0;
-    let underutilizedTrips = 0;
+    let present = 0;
+    let unknownBatch = 0;
+    let unknownShift = 0;
 
-    filteredTrips.forEach(trip => {
-      totalPassengers += trip.passenger_count ?? 0;
-      if (trip.load_factor !== null) {
-        totalLoadFactor += trip.load_factor;
-        validLoadFactors++;
-        if (trip.load_factor < 0.5) {
-          underutilizedTrips++;
-        }
-      }
+    filteredRows.forEach(r => {
+      present += r.present;
+      unknownBatch += r.unknown_batch;
+      unknownShift += r.unknown_shift;
     });
 
     return {
-      total_passengers: totalPassengers,
-      avg_load_factor: validLoadFactors > 0 ? totalLoadFactor / validLoadFactors : null,
-      trip_count: filteredTrips.length,
-      saving_estimate: underutilizedTrips * 500,
+      total_present: present,
+      total_unknown_batch: unknownBatch,
+      total_unknown_shift: unknownShift,
+      row_count: filteredRows.length,
     };
-  }, [filteredTrips]);
+  }, [filteredRows]);
 
   // Load data on mount
   useEffect(() => {
@@ -145,22 +94,16 @@ export default function BusDashboard() {
 
     try {
       // Only pass API-supported filters to backend
-      const data = await fetchSummary({
+      const data = await fetchHeadcount({
         date_from: filters.date_from,
         date_to: filters.date_to,
-        route: filters.route,
-        direction: filters.direction,
+        shift: filters.shift,
+        bus_id: filters.bus_id,
       });
-      setSummary(data);
+      setHeadcount(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
-      setSummary({
-        total_passengers: null,
-        avg_load_factor: null,
-        trip_count: null,
-        saving_estimate: null,
-        trips: [],
-      });
+      setHeadcount({ rows: [] });
     } finally {
       setLoading(false);
     }
@@ -171,8 +114,8 @@ export default function BusDashboard() {
   };
 
   // Check if local filters are active (showing filtered vs total)
-  const hasLocalFilters = filters.bus_id || filters.trip_code || filters.load_factor_min || filters.load_factor_max;
-  const showingFiltered = hasLocalFilters && filteredTrips.length !== summary.trips.length;
+  const hasLocalFilters = filters.bus_id;
+  const showingFiltered = hasLocalFilters && filteredRows.length !== headcount.rows.length;
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -206,7 +149,6 @@ export default function BusDashboard() {
           onReset={handleReset}
           loading={loading}
           availableBuses={availableBuses}
-          availableTripCodes={availableTripCodes}
         />
 
         {/* Error Message */}
@@ -226,33 +168,27 @@ export default function BusDashboard() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <KpiCard
-            title="Total Passengers"
-            value={filteredKpis.total_passengers ?? '-'}
+            title="Total Present"
+            value={filteredKpis.total_present ?? '-'}
             subtitle={showingFiltered ? 'filtered results' : 'in selected period'}
             color="blue"
           />
           <KpiCard
-            title="Average Load Factor"
-            value={formatPercentage(filteredKpis.avg_load_factor)}
-            subtitle="bus utilization"
-            color={
-              filteredKpis.avg_load_factor !== null && filteredKpis.avg_load_factor >= 0.7
-                ? 'green'
-                : filteredKpis.avg_load_factor !== null && filteredKpis.avg_load_factor >= 0.5
-                ? 'yellow'
-                : 'red'
-            }
+            title="Unknown Batch"
+            value={filteredKpis.total_unknown_batch ?? '-'}
+            subtitle="needs mapping"
+            color="yellow"
           />
           <KpiCard
-            title="Trip Count"
-            value={filteredKpis.trip_count ?? '-'}
-            subtitle={showingFiltered ? `of ${summary.trips.length} total` : 'total trips'}
-            color="blue"
+            title="Unknown Shift"
+            value={filteredKpis.total_unknown_shift ?? '-'}
+            subtitle="outside shift window"
+            color="red"
           />
           <KpiCard
-            title="Saving Estimate"
-            value={formatCurrency(filteredKpis.saving_estimate)}
-            subtitle="potential savings"
+            title="Row Count"
+            value={filteredKpis.row_count ?? '-'}
+            subtitle={showingFiltered ? `of ${headcount.rows.length} total` : 'aggregated rows'}
             color="green"
           />
         </div>
@@ -261,7 +197,7 @@ export default function BusDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           {/* Trip Table - takes 2/3 of the space on large screens */}
           <div className="lg:col-span-2">
-            <TripTable trips={filteredTrips} loading={loading} />
+            <TripTable rows={filteredRows} loading={loading} />
           </div>
 
           {/* Chart Placeholder - takes 1/3 of the space on large screens */}

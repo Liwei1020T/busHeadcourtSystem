@@ -20,16 +20,16 @@ A comprehensive system for counting bus passengers using employee cards, analyzi
 
 ### Purpose
 This system tracks employee bus ridership at factory facilities to:
-- Count passengers per trip using employee card scans
-- Calculate bus utilization (load factor)
+- Record attendance by shift using batch-ID card scans
+- Track headcount per bus/shift/day
 - Identify optimization opportunities for bus fleet management
 - Generate reports for cost analysis and route planning
 
 ### Key Features
 - **Offline-first Pi Agent**: Works without network, syncs when connected
 - **Real-time Dashboard**: View passenger counts, load factors, and trends
-- **Automatic Trip Detection**: Assigns scans to trips based on time windows
-- **Deduplication**: Prevents duplicate counting of same employee per trip
+- **Automatic Shift Derivation**: Assigns scans to morning/night based on KL time
+- **Deduplication**: Prevents duplicate counting of same employee per day/shift
 
 ---
 
@@ -39,7 +39,7 @@ This system tracks employee bus ridership at factory facilities to:
 ┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
 │   Raspberry Pi      │     │   Backend API       │     │   Web Dashboard     │
 │   + Card Reader     │────▶│   (FastAPI)         │◀────│   (React)           │
-│   (per bus)         │     │   Port: 8000        │     │   Port: 5173        │
+│   (entry scanner)   │     │   Port: 8000        │     │   Port: 5173        │
 └─────────────────────┘     └──────────┬──────────┘     └─────────────────────┘
          │                             │
          │                    ┌────────▼────────┐
@@ -49,11 +49,11 @@ This system tracks employee bus ridership at factory facilities to:
 ```
 
 ### Data Flow
-1. Employee taps card on bus reader
+1. Employee taps card (batch ID) at the factory entry scanner
 2. Pi Agent stores scan in local SQLite database
 3. Every 60 seconds, Pi uploads pending scans to backend
-4. Backend deduplicates and stores in central database
-5. Dashboard displays real-time statistics
+4. Backend derives shift (KL time), resolves employee→bus/van, deduplicates per batch+date+shift, and stores attendance
+5. Dashboard displays headcount and attendance statistics
 
 ---
 
@@ -85,8 +85,9 @@ bus-optimizer/
 │   │   │   └── security.py       # API key validation
 │   │   ├── models/               # SQLAlchemy ORM models
 │   │   │   ├── bus.py
-│   │   │   ├── trip.py
-│   │   │   └── scan.py
+│   │   │   ├── van.py
+│   │   │   ├── employee.py
+│   │   │   └── attendance.py
 │   │   └── schemas/              # Pydantic request/response schemas
 │   │       ├── bus.py
 │   │       └── report.py
@@ -122,141 +123,28 @@ bus-optimizer/
 
 ### PostgreSQL Schema (Central Database)
 
-```sql
--- =============================================
--- Bus Optimizer Database Schema
--- PostgreSQL version
--- =============================================
+Schema is defined in `backend/init_postgres.sql` (summary below):
 
--- Drop existing tables (for clean reinstall)
-DROP TABLE IF EXISTS trip_scans CASCADE;
-DROP TABLE IF EXISTS trips CASCADE;
-DROP TABLE IF EXISTS buses CASCADE;
-
--- =============================================
--- Table: buses
--- Stores information about each bus in the fleet
--- =============================================
-CREATE TABLE buses (
-    bus_id          VARCHAR(50) PRIMARY KEY,
-    plate_number    VARCHAR(50),
-    route_name      VARCHAR(100),
-    capacity        INTEGER DEFAULT 40,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Insert sample buses
-INSERT INTO buses (bus_id, plate_number, route_name, capacity) VALUES
-    ('BUS_SP_01', 'WPL 1234', 'SP to Factory', 40),
-    ('BUS_SP_02', 'WPL 1235', 'SP to Factory', 40),
-    ('BUS_KL_01', 'WKL 5678', 'Kulim to Factory', 45),
-    ('BUS_PG_01', 'PNG 9012', 'Penang to Factory', 50);
-
--- =============================================
--- Table: trips
--- Stores each bus trip (one record per bus per date per trip_code)
--- =============================================
-CREATE TABLE trips (
-    trip_id         SERIAL PRIMARY KEY,
-    bus_id          VARCHAR(50) NOT NULL REFERENCES buses(bus_id),
-    trip_date       DATE NOT NULL,
-    trip_code       VARCHAR(50) NOT NULL,
-    direction       VARCHAR(20) NOT NULL CHECK (direction IN ('to_factory', 'from_factory')),
-    planned_time    TIME,
-    actual_time     TIMESTAMP,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT uq_bus_date_trip UNIQUE (bus_id, trip_date, trip_code)
-);
-
--- Index for faster queries
-CREATE INDEX idx_trips_date ON trips(trip_date);
-CREATE INDEX idx_trips_bus_id ON trips(bus_id);
-
--- =============================================
--- Table: trip_scans
--- Stores individual employee scans for each trip
--- =============================================
-CREATE TABLE trip_scans (
-    id              SERIAL PRIMARY KEY,
-    trip_id         INTEGER NOT NULL REFERENCES trips(trip_id) ON DELETE CASCADE,
-    employee_id     VARCHAR(50) NOT NULL,
-    scan_time       TIMESTAMP NOT NULL,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT uq_trip_employee UNIQUE (trip_id, employee_id)
-);
-
--- Index for faster queries
-CREATE INDEX idx_trip_scans_trip_id ON trip_scans(trip_id);
-CREATE INDEX idx_trip_scans_employee_id ON trip_scans(employee_id);
-
--- =============================================
--- View: trip_summary
--- Convenient view for trip statistics
--- =============================================
-CREATE OR REPLACE VIEW trip_summary AS
-SELECT 
-    t.trip_id,
-    t.trip_date,
-    t.trip_code,
-    t.bus_id,
-    b.route_name,
-    t.direction,
-    b.capacity,
-    COUNT(ts.id) AS passenger_count,
-    ROUND(COUNT(ts.id)::NUMERIC / NULLIF(b.capacity, 0), 3) AS load_factor
-FROM trips t
-LEFT JOIN buses b ON t.bus_id = b.bus_id
-LEFT JOIN trip_scans ts ON t.trip_id = ts.trip_id
-GROUP BY t.trip_id, t.trip_date, t.trip_code, t.bus_id, b.route_name, t.direction, b.capacity
-ORDER BY t.trip_date DESC, t.trip_code;
-
--- =============================================
--- Sample queries for reporting
--- =============================================
-
--- Get daily summary
--- SELECT trip_date, SUM(passenger_count) as total_passengers, AVG(load_factor) as avg_load
--- FROM trip_summary
--- WHERE trip_date BETWEEN '2025-11-01' AND '2025-11-30'
--- GROUP BY trip_date
--- ORDER BY trip_date;
-
--- Get underutilized trips (load factor < 50%)
--- SELECT * FROM trip_summary
--- WHERE load_factor < 0.5 AND trip_date >= CURRENT_DATE - INTERVAL '7 days'
--- ORDER BY load_factor;
-```
+- `buses`: `bus_id` (PK, <=4 chars), `route` (inline text), `plate_number`, `capacity`
+- `vans`: `id` (PK), `van_code` (unique), `bus_id` (FK), `plate_number`, `driver_name`, `capacity`, `active`
+- `employees`: `id` (PK), `batch_id` (unique), `name`, `bus_id` (FK), `van_id` (FK, nullable), `active`
+- `attendances`: `id` (PK), `scanned_batch_id`, `employee_id` (FK), `bus_id` (FK), `van_id` (FK), `shift` (enum morning/night/unknown), `status` (present/unknown_batch/unknown_shift), `scanned_at` (timestamptz), `scanned_on` (date, KL), unique on (`scanned_batch_id`,`scanned_on`,`shift`).
 
 ### SQLite Schema (Pi Agent Local Database)
 
 ```sql
--- =============================================
--- Pi Agent Local Database Schema
--- SQLite version (stored in bus_log.db)
--- =============================================
-
--- Table: scans
--- Stores all card scans locally before upload
+-- Table: scans (Pi agent local SQLite)
 CREATE TABLE IF NOT EXISTS scans (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    bus_id       TEXT NOT NULL,
-    trip_date    TEXT NOT NULL,          -- Format: YYYY-MM-DD
-    trip_code    TEXT NOT NULL,
-    direction    TEXT NOT NULL,          -- 'to_factory' or 'from_factory'
-    employee_id  TEXT NOT NULL,
-    card_uid     TEXT NOT NULL,
-    scan_time    TEXT NOT NULL,          -- Format: ISO 8601 datetime
-    uploaded     INTEGER DEFAULT 0       -- 0 = pending, 1 = uploaded
+    batch_id     TEXT NOT NULL,
+    card_uid     TEXT,
+    scan_time    TEXT NOT NULL,   -- ISO 8601 datetime
+    uploaded     INTEGER DEFAULT 0
 );
 
--- Index for faster upload queries
 CREATE INDEX IF NOT EXISTS idx_scans_uploaded ON scans(uploaded);
-
--- Unique constraint to prevent duplicate scans
 CREATE UNIQUE INDEX IF NOT EXISTS idx_scans_unique 
-ON scans(bus_id, trip_date, trip_code, employee_id);
+ON scans(batch_id, scan_time);
 ```
 
 ---
@@ -330,7 +218,7 @@ pip install -r requirements.txt
 # Create configuration file
 copy config.sample.json config.json
 
-# Edit config.json to set your bus_id, API key, and trip schedules
+# Edit config.json to set your API key and upload interval
 
 # Run the agent
 python run_agent.py
@@ -340,49 +228,30 @@ python run_agent.py
 
 1. Start backend: `python run_server.py` (in backend folder)
 2. Start dashboard: `npm run dev` (in web-dashboard folder)
-3. Start Pi agent: `python run_agent.py` (in pi-agent folder)
-4. In Pi agent terminal, type card UIDs: `EMP001`, `EMP002`, `EMP003`
+3. Start Pi agent (entry scanner): `python run_agent.py` (in pi-agent folder)
+4. In Pi agent terminal, type batch IDs: `BATCH-001`, `BATCH-002`
 5. Wait 60 seconds for auto-upload, or type `status` to check
-6. Refresh dashboard to see the scans
+6. Hit `GET /api/report/headcount?date=YYYY-MM-DD` or refresh dashboard to see attendance
 
 ---
 
 ## Configuration
 
-### Pi Agent Configuration (config.json)
+### Entry Scanner Configuration (config.json)
 
 ```json
 {
-  "bus_id": "BUS_SP_01",
   "api_base_url": "http://localhost:8000/api/bus",
-  "api_key": "BUS_SP_01_SECRET",
-  "trips": [
-    {
-      "trip_code": "SP-0630-IN",
-      "direction": "to_factory",
-      "start": "05:30",
-      "end": "08:00"
-    },
-    {
-      "trip_code": "SP-1800-OUT",
-      "direction": "from_factory",
-      "start": "16:30",
-      "end": "20:00"
-    }
-  ]
+  "api_key": "ENTRY_SECRET",
+  "upload_interval_seconds": 60
 }
 ```
 
 | Field | Description |
 |-------|-------------|
-| `bus_id` | Unique identifier for this bus |
 | `api_base_url` | Backend API endpoint |
 | `api_key` | Authentication key (must match backend config) |
-| `trips` | Array of trip time windows |
-| `trips[].trip_code` | Unique code for this trip |
-| `trips[].direction` | `to_factory` or `from_factory` |
-| `trips[].start` | Trip start time (HH:MM) |
-| `trips[].end` | Trip end time (HH:MM) |
+| `upload_interval_seconds` | How often to upload pending scans |
 
 ### Backend Environment Variables
 
@@ -396,8 +265,8 @@ DATABASE_URL=sqlite:///./bus_optimizer.db
 # For PostgreSQL (production):
 # DATABASE_URL=postgresql://username:password@localhost:5432/bus_optimizer
 
-# API Keys (format: BUS_ID:SECRET_KEY, comma-separated)
-API_KEYS=BUS_SP_01:BUS_SP_01_SECRET,BUS_KL_01:BUS_KL_01_SECRET,BUS_PG_01:BUS_PG_01_SECRET
+# API Keys (format: LABEL:SECRET_KEY, comma-separated)
+API_KEYS=ENTRY_GATE:ENTRY_SECRET
 
 # Debug mode (set to false in production)
 DEBUG=true
@@ -418,7 +287,7 @@ Response:
 {"status": "healthy"}
 ```
 
-### Upload Scans (Pi Agent → Backend)
+### Upload Scans (Entry Scanner → Backend)
 
 ```
 POST /api/bus/upload-scans
@@ -432,13 +301,8 @@ Request Body:
   "scans": [
     {
       "id": 1,
-      "bus_id": "BUS_SP_01",
-      "trip_date": "2025-11-28",
-      "trip_code": "SP-0630-IN",
-      "direction": "to_factory",
-      "employee_id": "EMP001",
-      "card_uid": "EMP001",
-      "scan_time": "2025-11-28T06:45:00"
+      "batch_id": "BATCH-001",
+      "scan_time": "2025-11-28T06:45:00+08:00"
     }
   ]
 }
@@ -454,59 +318,59 @@ Response:
 ### Get Summary Report
 
 ```
-GET /api/report/summary?date_from=2025-11-01&date_to=2025-11-30&route=&direction=
+GET /api/report/headcount?date=2025-11-28&shift=morning&bus_id=A01
 ```
 
 Query Parameters:
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `date_from` | No | Start date (YYYY-MM-DD) |
-| `date_to` | No | End date (YYYY-MM-DD) |
-| `route` | No | Filter by route name |
-| `direction` | No | Filter: `to_factory` or `from_factory` |
+| `date` | No | Date (YYYY-MM-DD); defaults to all |
+| `shift` | No | `morning` or `night` |
+| `bus_id` | No | Filter by bus |
 
 Response:
 ```json
 {
-  "total_passengers": 150,
-  "avg_load_factor": 0.72,
-  "trip_count": 10,
-  "saving_estimate": 2500.0,
-  "trips": [
+  "rows": [
     {
-      "trip_date": "2025-11-28",
-      "trip_code": "SP-0630-IN",
-      "bus_id": "BUS_SP_01",
-      "route_name": "SP to Factory",
-      "direction": "to_factory",
-      "passenger_count": 35,
-      "capacity": 40,
-      "load_factor": 0.875
+      "date": "2025-11-28",
+      "shift": "morning",
+      "bus_id": "A01",
+      "route": "Route A",
+      "present": 35,
+      "unknown_batch": 1,
+      "unknown_shift": 0,
+      "total": 36
     }
   ]
 }
 ```
 
-### Get Scan Details
+### Get Attendance Details
 
 ```
-GET /api/report/scans?date=2025-11-28
+GET /api/report/attendance?date=2025-11-28&shift=morning&bus_id=A01
 ```
 
 Query Parameters:
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `date` | Yes | Date to get scans for (YYYY-MM-DD) |
+| `shift` | No | `morning` or `night` |
+| `bus_id` | No | Filter by bus |
 
 Response:
 ```json
 [
   {
-    "scan_time": "2025-11-28T06:45:00",
-    "employee_id": "EMP001",
-    "bus_id": "BUS_SP_01",
-    "trip_code": "SP-0630-IN",
-    "direction": "to_factory"
+    "scanned_at": "2025-11-28T06:45:00+08:00",
+    "batch_id": "BATCH-001",
+    "employee_name": "Employee One",
+    "bus_id": "A01",
+    "van_id": 1,
+    "shift": "morning",
+    "status": "present",
+    "source": "pi_agent"
   }
 ]
 ```
@@ -573,22 +437,6 @@ Make sure you're running from the correct directory:
 ```powershell
 cd backend
 python run_server.py
-```
-
-### Pi Agent - "No active trip for current time"
-
-Edit `config.json` to add a trip time window that includes the current time:
-```json
-{
-  "trips": [
-    {
-      "trip_code": "TEST-TRIP",
-      "direction": "to_factory",
-      "start": "00:00",
-      "end": "23:59"
-    }
-  ]
-}
 ```
 
 ### Dashboard shows "Failed to load data"
