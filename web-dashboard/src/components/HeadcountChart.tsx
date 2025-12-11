@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { HeadcountRow } from '../types';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,11 +21,11 @@ type ChartDay = {
   total: number;
 };
 
-const SHIFT_LINES: { key: ShiftKey; label: string; stroke: string; dot: string }[] = [
-  { key: 'morning', label: 'Morning', stroke: 'stroke-green-500', dot: 'fill-green-500' },
-  { key: 'night', label: 'Night', stroke: 'stroke-indigo-500', dot: 'fill-indigo-500' },
-  { key: 'unknown', label: 'Unknown', stroke: 'stroke-gray-400', dot: 'fill-gray-400' },
-] as const;
+const SHIFT_COLORS: Record<ShiftKey, string> = {
+  morning: '#10b981',
+  night: '#6366f1',
+  unknown: '#94a3b8',
+};
 
 function formatDateLabel(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
@@ -35,6 +36,8 @@ function formatDateLabel(date: string): string {
 }
 
 export default function HeadcountChart({ rows, loading }: HeadcountChartProps) {
+  const [chartMode, setChartMode] = useState<'line' | 'bar'>('line');
+
   const chartData = useMemo<ChartDay[]>(() => {
     if (rows.length === 0) return [];
 
@@ -63,196 +66,152 @@ export default function HeadcountChart({ rows, loading }: HeadcountChartProps) {
     return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [rows]);
 
-  const maxTotal = useMemo(
-    () => chartData.reduce((max, day) => Math.max(max, day.total), 0),
+  const totalsByShift = useMemo(
+    () =>
+      chartData.reduce(
+        (acc, day) => {
+          acc.morning += day.morning;
+          acc.night += day.night;
+          acc.unknown += day.unknown;
+          acc.unknownIssues += day.unknownIssues;
+          return acc;
+        },
+        { morning: 0, night: 0, unknown: 0, unknownIssues: 0 },
+      ),
     [chartData],
-  );
-  const totalUnknown = useMemo(
-    () => chartData.reduce((sum, day) => sum + day.unknownIssues, 0),
-    [chartData],
-  );
-
-  const renderLegend = () => (
-    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-600">
-      {SHIFT_LINES.map((line) => (
-        <div key={line.key} className="flex items-center gap-2">
-          <span className={`h-[3px] w-6 rounded-full ${line.stroke}`} aria-hidden />
-          <span className="font-medium text-gray-700">{line.label}</span>
-        </div>
-      ))}
-      <div className="flex items-center gap-2 text-gray-700">
-        <span className="h-3 w-3 rounded-sm bg-amber-400" aria-hidden />
-        <span className="font-medium">
-          Unknown (batch/shift): {totalUnknown}
-        </span>
-      </div>
-    </div>
   );
 
   const renderChart = () => {
     if (chartData.length === 0) {
       return (
-        <div className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-600">
+        <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-600">
           No headcount data to visualize. Adjust filters and search again.
         </div>
       );
     }
 
+    const commonAxes = (
+      <>
+        <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
+        <XAxis
+          dataKey="date"
+          tickFormatter={formatDateLabel}
+          tick={{ fill: '#475569', fontSize: 12 }}
+          tickMargin={8}
+        />
+        <YAxis
+          tick={{ fill: '#475569', fontSize: 12 }}
+          allowDecimals={false}
+        />
+        <Tooltip
+          labelFormatter={(label) => `Date: ${formatDateLabel(String(label))}`}
+          formatter={(value) => (Number.isFinite(value) ? Number(value).toLocaleString() : value)}
+        />
+        <Legend />
+      </>
+    );
+
     return (
-      <ResponsiveLineChart data={chartData} maxTotal={maxTotal} />
+      <div className="w-full overflow-hidden rounded-xl border border-slate-100 bg-white">
+        <ResponsiveContainer width="100%" height={380}>
+          {chartMode === 'line' ? (
+            <LineChart data={chartData} margin={{ top: 16, right: 16, left: 8, bottom: 16 }}>
+              {commonAxes}
+              <Line type="monotone" dataKey="morning" stroke={SHIFT_COLORS.morning} strokeWidth={3} dot={{ r: 4 }} name="Morning" />
+              <Line type="monotone" dataKey="night" stroke={SHIFT_COLORS.night} strokeWidth={3} dot={{ r: 4 }} name="Night" />
+              <Line type="monotone" dataKey="unknown" stroke={SHIFT_COLORS.unknown} strokeWidth={3} dot={{ r: 4 }} name="Unknown" />
+            </LineChart>
+          ) : (
+            <BarChart data={chartData} margin={{ top: 16, right: 16, left: 8, bottom: 16 }}>
+              {commonAxes}
+              <Bar dataKey="morning" fill={SHIFT_COLORS.morning} name="Morning" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="night" fill={SHIFT_COLORS.night} name="Night" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="unknown" fill={SHIFT_COLORS.unknown} name="Unknown" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
     );
   };
 
   return (
-    <Card className="h-full">
-      <div className="border-b px-6 py-4">
-        <h3 className={TYPOGRAPHY.sectionTitle}>Headcount Trend</h3>
-        <p className={`${TYPOGRAPHY.bodySm} mt-1`}>
-          Totals by date and shift based on the current filters.
-        </p>
+    <Card className="h-full w-full">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+        <div>
+          <h3 className={TYPOGRAPHY.sectionTitle}>Headcount Trend</h3>
+          <p className={`${TYPOGRAPHY.bodySm} mt-1`}>
+            Totals by date and shift based on the current filters.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setChartMode('line')}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              chartMode === 'line'
+                ? 'bg-sky-600 text-white shadow-sm shadow-sky-100'
+                : 'border border-slate-200 bg-white text-slate-800'
+            }`}
+            type="button"
+          >
+            Line
+          </button>
+          <button
+            onClick={() => setChartMode('bar')}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+              chartMode === 'bar'
+                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-100'
+                : 'border border-slate-200 bg-white text-slate-800'
+            }`}
+            type="button"
+          >
+            Bar
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4 p-6">
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-4 w-32" />
-            <div className="flex items-end gap-3">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-48 w-16" />
-              ))}
-            </div>
+            <Skeleton className="h-[280px] w-full" />
           </div>
         ) : (
           renderChart()
         )}
 
-        {renderLegend()}
+        <div className="w-full rounded-lg border border-gray-200 bg-white/90 p-3 shadow-inner shadow-gray-50">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
+              <span className="flex items-center gap-2">
+                <span className="h-2.5 w-6 rounded-full" style={{ background: SHIFT_COLORS.morning }} />
+                Morning
+              </span>
+              <span className="text-sm text-gray-900">{totalsByShift.morning}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
+              <span className="flex items-center gap-2">
+                <span className="h-2.5 w-6 rounded-full" style={{ background: SHIFT_COLORS.night }} />
+                Night
+              </span>
+              <span className="text-sm text-gray-900">{totalsByShift.night}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
+              <span className="flex items-center gap-2">
+                <span className="h-2.5 w-6 rounded-full" style={{ background: SHIFT_COLORS.unknown }} />
+                Unknown
+              </span>
+              <span className="text-sm text-gray-900">{totalsByShift.unknown}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-semibold text-amber-700 sm:col-span-2">
+              <span className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                Unknown (batch/shift)
+              </span>
+              <span className="text-sm">{totalsByShift.unknownIssues}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </Card>
-  );
-}
-
-type ResponsiveLineChartProps = {
-  data: ChartDay[];
-  maxTotal: number;
-};
-
-function ResponsiveLineChart({ data, maxTotal }: ResponsiveLineChartProps) {
-  const width = Math.max(data.length * 80, 320);
-  const height = 260;
-  const margin = { top: 16, right: 16, bottom: 32, left: 40 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
-
-  const getX = (index: number) => {
-    if (data.length === 1) return margin.left + innerWidth / 2;
-    const ratio = index / (data.length - 1);
-    return margin.left + ratio * innerWidth;
-  };
-
-  const getY = (value: number) => {
-    if (!maxTotal) return margin.top + innerHeight;
-    const scaled = value / maxTotal;
-    return margin.top + innerHeight - scaled * innerHeight;
-  };
-
-  const tickValues = useMemo(() => {
-    if (!maxTotal) return [0];
-    const buckets = 3;
-    return Array.from({ length: buckets + 1 }, (_, i) =>
-      Math.round((maxTotal / buckets) * i),
-    );
-  }, [maxTotal]);
-
-  const linePaths = SHIFT_LINES.map((line) => {
-    const points = data.map((day, index) => ({
-      x: getX(index),
-      y: getY(day[line.key]),
-    }));
-    const path = points
-      .map((point, idx) => `${idx === 0 ? 'M' : 'L'}${point.x},${point.y}`)
-      .join(' ');
-    return { ...line, points, path };
-  });
-
-  return (
-    <div className="overflow-x-auto pb-2">
-      <svg width={width} height={height} role="img" aria-label="Headcount line chart">
-        {/* Grid lines */}
-        {tickValues.map((tick) => {
-          const y = getY(tick);
-          return (
-            <g key={tick}>
-              <line
-                x1={margin.left}
-                x2={width - margin.right}
-                y1={y}
-                y2={y}
-                className="stroke-gray-200"
-                strokeDasharray="4 4"
-              />
-              <text
-                x={margin.left - 8}
-                y={y + 4}
-                className="fill-gray-500 text-[10px]"
-                textAnchor="end"
-              >
-                {tick}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* Lines */}
-        {linePaths.map((line) => (
-          <path
-            key={line.key}
-            d={line.path}
-            className={`${line.stroke} fill-none`}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        ))}
-
-        {/* Points */}
-        {linePaths.map((line) =>
-          line.points.map((point, index) => (
-            <circle
-              key={`${line.key}-${index}`}
-              cx={point.x}
-              cy={point.y}
-              r={3.5}
-              className={line.dot}
-            />
-          )),
-        )}
-
-        {/* X-axis labels */}
-        {data.map((day, index) => {
-          const x = getX(index);
-          return (
-            <g key={day.date}>
-              <text
-                x={x}
-                y={height - 14}
-                className="fill-gray-500 text-[10px]"
-                textAnchor="middle"
-              >
-                {formatDateLabel(day.date)}
-              </text>
-              <text
-                x={x}
-                y={height - 26}
-                className="fill-gray-900 text-[11px] font-semibold"
-                textAnchor="middle"
-              >
-                {day.total}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
   );
 }
