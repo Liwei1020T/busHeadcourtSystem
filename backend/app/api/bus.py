@@ -23,6 +23,7 @@ from app.schemas.bus import (
     BusInfo,
     BusCreate,
     VanInfo,
+    VanCreate,
     EmployeeInfo,
     EmployeeCreate,
 )
@@ -103,6 +104,44 @@ def create_or_update_bus(payload: BusCreate, db: Session = Depends(get_db)):
 def list_vans(db: Session = Depends(get_db)):
     """List all vans with their bus assignments."""
     return db.query(Van).order_by(Van.bus_id, Van.van_code).all()
+
+
+@router.post("/vans", response_model=VanInfo, status_code=status.HTTP_201_CREATED)
+def create_or_update_van(payload: VanCreate, db: Session = Depends(get_db)):
+    """
+    Create or update a van for admin management.
+    Uses van_code as the unique key.
+    """
+    bus = db.query(Bus).filter(Bus.bus_id == payload.bus_id).first()
+    if not bus:
+        raise HTTPException(status_code=400, detail=f"Bus {payload.bus_id} not found")
+
+    van = db.query(Van).filter(Van.van_code == payload.van_code).first()
+    if van:
+        van.bus_id = payload.bus_id
+        van.plate_number = payload.plate_number
+        van.driver_name = payload.driver_name
+        van.capacity = payload.capacity
+        van.active = payload.active
+    else:
+        van = Van(
+            van_code=payload.van_code,
+            bus_id=payload.bus_id,
+            plate_number=payload.plate_number,
+            driver_name=payload.driver_name,
+            capacity=payload.capacity,
+            active=payload.active,
+        )
+        db.add(van)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Van code must be unique")
+
+    db.refresh(van)
+    return van
 
 
 @router.get("/employees", response_model=List[EmployeeInfo])

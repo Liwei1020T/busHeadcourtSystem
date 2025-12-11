@@ -375,6 +375,15 @@ Response:
 ]
 ```
 
+### CSV Exports
+
+- Headcount export (matches `/api/report/headcount` filters):  
+  `GET /api/report/headcount/export?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&shift=morning&bus_id=A01`
+- Attendance export (requires `date`, optional shift/bus):  
+  `GET /api/report/attendance/export?date=YYYY-MM-DD&shift=morning&bus_id=A01`
+
+The web dashboard includes download buttons that pass the current filters to these endpoints.
+
 ---
 
 ## Production Deployment

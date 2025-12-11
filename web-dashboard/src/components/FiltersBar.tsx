@@ -4,6 +4,7 @@ type FiltersBarProps = {
   filters: FilterParams;
   onFiltersChange: (filters: FilterParams) => void;
   onSearch: () => void;
+  onToday: () => void;
   onReset: () => void;
   loading: boolean;
   availableBuses: string[];
@@ -19,6 +20,7 @@ export default function FiltersBar({
   filters, 
   onFiltersChange, 
   onSearch, 
+  onToday,
   onReset,
   loading,
   availableBuses
@@ -37,7 +39,7 @@ export default function FiltersBar({
       {/* Primary Filters Row */}
       <div className="flex flex-wrap gap-4 items-end mb-4">
         {/* Date From */}
-        <div className="flex-1 min-w-[140px]">
+        <div className="w-full sm:flex-1 sm:min-w-[140px]">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Date From
           </label>
@@ -50,7 +52,7 @@ export default function FiltersBar({
         </div>
 
         {/* Date To */}
-        <div className="flex-1 min-w-[140px]">
+        <div className="w-full sm:flex-1 sm:min-w-[140px]">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Date To
           </label>
@@ -63,7 +65,7 @@ export default function FiltersBar({
         </div>
 
         {/* Shift Select */}
-        <div className="flex-1 min-w-[160px]">
+        <div className="w-full sm:flex-1 sm:min-w-[160px]">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Shift
           </label>
@@ -81,13 +83,20 @@ export default function FiltersBar({
         </div>
 
         {/* Search Button */}
-        <div className="flex gap-2">
+        <div className="w-full sm:w-auto flex gap-2">
           <button
             onClick={onSearch}
             disabled={loading}
-            className="px-6 py-2 bg-primary-600 text-white font-medium rounded-md shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto px-6 py-2 bg-primary-600 text-white font-medium rounded-md shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Loading...' : 'Search'}
+          </button>
+          <button
+            onClick={onToday}
+            disabled={loading}
+            className="w-full sm:w-auto px-4 py-2 bg-white text-primary-700 border border-primary-200 font-medium rounded-md shadow-sm hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Today
           </button>
         </div>
       </div>
@@ -96,7 +105,7 @@ export default function FiltersBar({
       <div className="border-t border-gray-200 pt-4">
         <div className="flex flex-wrap gap-4 items-end">
           {/* Bus ID Select */}
-          <div className="flex-1 min-w-[130px]">
+          <div className="w-full sm:flex-1 sm:min-w-[130px]">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Bus ID
             </label>
@@ -115,11 +124,11 @@ export default function FiltersBar({
           </div>
 
           {/* Reset Button */}
-          <div>
+          <div className="w-full sm:w-auto">
             <button
               onClick={onReset}
               disabled={loading}
-              className={`px-4 py-2 font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
+              className={`w-full sm:w-auto px-4 py-2 font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
                 hasActiveFilters 
                   ? 'bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-500' 
                   : 'bg-gray-100 text-gray-500 cursor-not-allowed'

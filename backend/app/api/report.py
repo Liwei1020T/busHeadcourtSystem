@@ -3,11 +3,14 @@ Report API endpoints.
 Provides headcount and attendance detail for the dashboard.
 """
 
+import csv
+import io
 import logging
 from datetime import datetime, date as date_type
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 
@@ -36,24 +39,23 @@ def parse_date(value: Optional[str]) -> Optional[date_type]:
 
 
 def validate_shift(value: Optional[str]) -> Optional[AttendanceShift]:
-    if value is None:
+    if value is None or value == "":
         return None
     try:
         return AttendanceShift(value)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid shift. Use morning or night.")
+        raise HTTPException(status_code=400, detail="Invalid shift. Use morning, night, or unknown.")
 
 
-@router.get("/headcount", response_model=HeadcountResponse)
-def headcount(
+def _query_headcount_rows(
     date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
     date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     shift: Optional[str] = Query(None, description="Filter by shift (morning/night)"),
     bus_id: Optional[str] = Query(None, description="Filter by bus ID"),
     db: Session = Depends(get_db),
-):
-    """Get per-bus headcount aggregated by date and shift. Supports single date or date range."""
+) -> List[HeadcountRow]:
+    """Shared query for headcount rows (JSON and CSV)."""
     target_date = parse_date(date)
     target_from = parse_date(date_from)
     target_to = parse_date(date_to)
@@ -103,18 +105,74 @@ def headcount(
                 total=int(row.total or 0),
             )
         )
+    return rows
 
+
+@router.get("/headcount", response_model=HeadcountResponse)
+def headcount(
+    date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
+    date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    shift: Optional[str] = Query(None, description="Filter by shift (morning/night/unknown)"),
+    bus_id: Optional[str] = Query(None, description="Filter by bus ID"),
+    db: Session = Depends(get_db),
+):
+    """Get per-bus headcount aggregated by date and shift. Supports single date or date range."""
+    rows = _query_headcount_rows(date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id, db=db)
     return HeadcountResponse(rows=rows)
 
 
-@router.get("/attendance", response_model=List[AttendanceRecord])
-def attendance_detail(
-    date: str = Query(..., description="Date to filter (YYYY-MM-DD)"),
-    shift: Optional[str] = Query(None, description="Shift filter (morning/night)"),
-    bus_id: Optional[str] = Query(None, description="Bus filter"),
+@router.get("/headcount/export")
+def headcount_export(
+    date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
+    date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    shift: Optional[str] = Query(None, description="Filter by shift (morning/night/unknown)"),
+    bus_id: Optional[str] = Query(None, description="Filter by bus ID"),
     db: Session = Depends(get_db),
 ):
-    """Get detailed attendance records for a date with optional filters."""
+    """Export headcount aggregates as CSV using the same filters as the JSON endpoint."""
+    rows = _query_headcount_rows(date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id, db=db)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["date", "shift", "bus_id", "route", "present", "unknown_batch", "unknown_shift", "total"])
+    for row in rows:
+        writer.writerow([row.date, row.shift, row.bus_id, row.route or "", row.present, row.unknown_batch, row.unknown_shift, row.total])
+
+    filename = _build_filename(prefix="headcount", date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id)
+    buffer.seek(0)
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _build_filename(prefix: str, date: Optional[str], date_from: Optional[str], date_to: Optional[str], shift: Optional[str], bus_id: Optional[str]) -> str:
+    """Create a descriptive filename for exports."""
+    parts = [prefix]
+    if date:
+        parts.append(date)
+    else:
+        if date_from:
+            parts.append(f"from-{date_from}")
+        if date_to:
+            parts.append(f"to-{date_to}")
+    if shift:
+        parts.append(f"shift-{shift}")
+    if bus_id:
+        parts.append(f"bus-{bus_id}")
+    return "_".join(parts) + ".csv"
+
+
+def _query_attendance_records(
+    date: str = Query(..., description="Date to filter (YYYY-MM-DD)"),
+    shift: Optional[str] = Query(None, description="Shift filter (morning/night/unknown)"),
+    bus_id: Optional[str] = Query(None, description="Bus filter"),
+    db: Session = Depends(get_db),
+) -> List[AttendanceRecord]:
+    """Shared query for attendance records (JSON and CSV)."""
     target_date = parse_date(date)
     if not target_date:
         raise HTTPException(status_code=400, detail="Date is required")
@@ -156,6 +214,51 @@ def attendance_detail(
         )
 
     return records
+
+
+@router.get("/attendance", response_model=List[AttendanceRecord])
+def attendance_detail(
+    date: str = Query(..., description="Date to filter (YYYY-MM-DD)"),
+    shift: Optional[str] = Query(None, description="Shift filter (morning/night/unknown)"),
+    bus_id: Optional[str] = Query(None, description="Bus filter"),
+    db: Session = Depends(get_db),
+):
+    """Get detailed attendance records for a date with optional filters."""
+    return _query_attendance_records(date=date, shift=shift, bus_id=bus_id, db=db)
+
+
+@router.get("/attendance/export")
+def attendance_export(
+    date: str = Query(..., description="Date to filter (YYYY-MM-DD)"),
+    shift: Optional[str] = Query(None, description="Shift filter (morning/night/unknown)"),
+    bus_id: Optional[str] = Query(None, description="Bus filter"),
+    db: Session = Depends(get_db),
+):
+    """Export attendance detail as CSV using the same filters as the JSON endpoint."""
+    records = _query_attendance_records(date=date, shift=shift, bus_id=bus_id, db=db)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["scanned_at", "batch_id", "employee_name", "bus_id", "van_id", "shift", "status", "source"])
+    for record in records:
+        writer.writerow([
+            record.scanned_at,
+            record.batch_id,
+            record.employee_name or "",
+            record.bus_id or "",
+            record.van_id if record.van_id is not None else "",
+            record.shift,
+            record.status,
+            record.source or "",
+        ])
+
+    filename = _build_filename(prefix="attendance", date=date, date_from=None, date_to=None, shift=shift, bus_id=bus_id)
+    buffer.seek(0)
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/summary", response_model=SummaryResponse)

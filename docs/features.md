@@ -75,9 +75,10 @@ This document describes the current system features and the expected behavior of
   - Unknown batch count.
   - Unknown shift count.
 - Table: rows per bus with counts; click-through opens Attendance Detail pre-filtered.
+- Inline drill-down: a Scan Details table lives on the same page and auto-applies the current bus/shift filters when loading data.
 
 ### Attendance Detail Page/Modal
-- Filter controls: date (required), shift (optional), bus (optional).
+- Filter controls: date (required), shift (optional), bus (optional). On the dashboard, these defaults inherit the active headcount filters.
 - Data source: `GET /api/report/attendance`.
 - Columns: scanned_at, batch_id, employee_name (or blank), bus_id, van_id, shift, status, source.
 - Usage: investigate unknown batches/shifts; verify timing; export if needed.

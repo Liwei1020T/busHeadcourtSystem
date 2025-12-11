@@ -1,3 +1,20 @@
+# AI Context & Memory Preservation
+
+**IMPORTANT FOR AI ASSISTANT:**
+To maintain context and avoid "memory loss" across sessions, you must **ALWAYS** consult the documentation files in the `docs/` folder before making changes or answering complex queries.
+
+The `docs/` folder is the source of truth for this project.
+- **Architecture & Systems:** `docs/systems/*.md`
+- **Frontend Pages:** `docs/pages/*.md`
+- **General Design:** `docs/system-design.md`
+
+When asked to implement features or fix bugs:
+1.  **Read** the relevant documentation first.
+2.  **Update** the documentation if your changes modify the system behavior or architecture.
+3.  **Ensure** your code aligns with the documented design constraints (e.g., No Chinese characters in code).
+
+---
+
 You are a senior full-stack engineer and architect.
 You will implement a Bus Passenger Counting & Optimization System from scratch.
 The system is used in a factory to count bus passengers using employee cards, then analyze the data to decide how to reduce buses or adjust trips.
