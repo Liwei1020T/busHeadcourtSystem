@@ -1,14 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import FiltersBar from '../components/FiltersBar';
 import KpiCard from '../components/KpiCard';
 import TripTable from '../components/TripTable';
 import ScanTable from '../components/ScanTable';
 import HeadcountChart from '../components/HeadcountChart';
-import { exportHeadcountCsv, fetchHeadcount } from '../api';
+import AttendanceTrendChart from '../components/AttendanceTrendChart';
+import BusComparisonChart from '../components/BusComparisonChart';
+import ShiftDistributionChart from '../components/ShiftDistributionChart';
+import EmptyState from '../components/EmptyState';
+import { exportHeadcountCsv, fetchBuses, fetchHeadcount } from '../api';
 import { HeadcountResponse, FilterParams } from '../types';
 import { Button } from '@/components/ui/button';
 import { SPACING, TYPOGRAPHY } from '@/lib/design-system/tokens';
-import { useToast } from '@/contexts/ToastContext';
+import { Users, AlertTriangle, Clock, Database } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 // Get today's date in YYYY-MM-DD format
 function getTodayString(): string {
@@ -33,31 +38,50 @@ const getInitialFilters = (): FilterParams => ({
 
 export default function BusDashboard() {
   const today = getTodayString();
-  const { showToast } = useToast();
   
   const [filters, setFilters] = useState<FilterParams>(getInitialFilters());
+  const filtersRef = useRef<FilterParams>(getInitialFilters());
 
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [busOptions, setBusOptions] = useState<string[]>([]);
   
   const [headcount, setHeadcount] = useState<HeadcountResponse>({
     rows: [],
   });
 
-  // Extract unique buses from data for filter dropdowns
+  // Build dropdown options from master bus list plus any buses in the current dataset
   const availableBuses = useMemo(() => {
-    const buses = new Set(headcount.rows.map(t => t.bus_id).filter(Boolean));
+    const buses = new Set(busOptions);
+    headcount.rows.forEach(row => {
+      if (row.bus_id) {
+        buses.add(row.bus_id);
+      }
+    });
     return Array.from(buses).sort();
-  }, [headcount.rows]);
+  }, [busOptions, headcount.rows]);
 
-  // Apply local filters (bus only - shift/date handled server-side)
+  // Apply local filters to align UI with selected criteria
   const filteredRows = useMemo(() => {
-    let rows = headcount.rows;
-    if (filters.bus_id) {
-      rows = rows.filter(t => t.bus_id === filters.bus_id);
-    }
-    return rows;
-  }, [headcount.rows, filters.bus_id]);
+    const from = filters.date_from ? new Date(filters.date_from) : null;
+    const to = filters.date_to ? new Date(filters.date_to) : null;
+
+    return headcount.rows.filter(row => {
+      if (filters.bus_id && row.bus_id !== filters.bus_id) return false;
+      if (filters.shift && row.shift !== filters.shift) return false;
+
+      if (from) {
+        const rowDate = new Date(row.date);
+        if (rowDate < from) return false;
+      }
+      if (to) {
+        const rowDate = new Date(row.date);
+        if (rowDate > to) return false;
+      }
+
+      return true;
+    });
+  }, [headcount.rows, filters.bus_id, filters.shift, filters.date_from, filters.date_to]);
 
   // Calculate KPIs from filtered rows
   const filteredKpis = useMemo(() => {
@@ -88,10 +112,15 @@ export default function BusDashboard() {
     };
   }, [filteredRows]);
 
+  const setAndCacheFilters = (next: FilterParams) => {
+    filtersRef.current = next;
+    setFilters(next);
+  };
+
   const handleSearch = async (overrideFilters?: FilterParams) => {
     setLoading(true);
 
-    const activeFilters = overrideFilters || filters;
+    const activeFilters = overrideFilters || filtersRef.current;
 
     try {
       // Only pass API-supported filters to backend
@@ -102,10 +131,10 @@ export default function BusDashboard() {
         bus_id: activeFilters.bus_id,
       });
       setHeadcount(data);
-      showToast('success', 'Data loaded successfully');
+      toast.success(`Loaded ${data.rows.length} records successfully`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load data';
-      showToast('error', message);
+      toast.error(message);
       setHeadcount({ rows: [] });
     } finally {
       setLoading(false);
@@ -113,7 +142,7 @@ export default function BusDashboard() {
   };
 
   const handleReset = () => {
-    setFilters(getInitialFilters());
+    setAndCacheFilters(getInitialFilters());
   };
 
   const handleToday = async () => {
@@ -124,7 +153,7 @@ export default function BusDashboard() {
       shift: '',
       bus_id: '',
     };
-    setFilters(todayFilters);
+    setAndCacheFilters(todayFilters);
     await handleSearch(todayFilters);
   };
 
@@ -134,8 +163,40 @@ export default function BusDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Keep ref in sync if filters change for any reason
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  // Fetch available buses for dropdowns (independent of current headcount filter)
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBuses = async () => {
+      try {
+        const buses = await fetchBuses();
+        if (!cancelled) {
+          const ids = buses.map(b => b.bus_id).filter(Boolean);
+          setBusOptions(ids.sort());
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Failed to load buses';
+          toast.error(message);
+        }
+      }
+    };
+
+    loadBuses();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleHeadcountExport = async () => {
     setExporting(true);
+    const toastId = toast.loading('Generating CSV...');
+    
     try {
       await exportHeadcountCsv({
         date_from: filters.date_from,
@@ -143,18 +204,21 @@ export default function BusDashboard() {
         shift: filters.shift || undefined,
         bus_id: filters.bus_id || undefined,
       });
-      showToast('success', 'Headcount CSV downloaded successfully');
+      toast.success(
+        `Downloaded ${filteredRows.length} records successfully!`,
+        { id: toastId }
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to export headcount';
-      showToast('error', message);
+      toast.error(message, { id: toastId });
     } finally {
       setExporting(false);
     }
   };
 
   // Check if local filters are active (showing filtered vs total)
-  const hasLocalFilters = filters.bus_id;
-  const showingFiltered = hasLocalFilters && filteredRows.length !== headcount.rows.length;
+  const hasLocalFilters = Boolean(filters.bus_id || filters.shift);
+  const showingFiltered = hasLocalFilters || filteredRows.length !== headcount.rows.length;
 
   return (
     <div className={SPACING.section}>
@@ -171,7 +235,7 @@ export default function BusDashboard() {
 
       <FiltersBar
         filters={filters}
-        onFiltersChange={setFilters}
+        onFiltersChange={setAndCacheFilters}
         onSearch={handleSearch}
         onToday={handleToday}
         onReset={handleReset}
@@ -201,40 +265,65 @@ export default function BusDashboard() {
           value={filteredKpis.total_present ?? '-'}
           subtitle={showingFiltered ? 'filtered results' : 'in selected period'}
           color="blue"
+          icon={<Users className="w-8 h-8" />}
         />
         <KpiCard
           title="Unknown Batch"
           value={filteredKpis.total_unknown_batch ?? '-'}
           subtitle="needs mapping"
           color="yellow"
+          icon={<AlertTriangle className="w-8 h-8" />}
         />
         <KpiCard
           title="Unknown Shift"
           value={filteredKpis.total_unknown_shift ?? '-'}
           subtitle="outside shift window"
           color="red"
+          icon={<Clock className="w-8 h-8" />}
         />
         <KpiCard
           title="Row Count"
           value={filteredKpis.row_count ?? '-'}
           subtitle={showingFiltered ? `of ${headcount.rows.length} total` : 'aggregated rows'}
           color="green"
+          icon={<Database className="w-8 h-8" />}
         />
       </div>
 
-      <div className="space-y-6">
-        <TripTable rows={filteredRows} loading={loading} />
-        <HeadcountChart rows={filteredRows} loading={loading} />
-      </div>
-
-      <div>
-        <ScanTable
-          initialDate={today}
-          initialBusId={filters.bus_id}
-          initialShift={filters.shift}
-          availableBuses={availableBuses}
+      {filteredRows.length === 0 && !loading ? (
+        <EmptyState
+          title="No data found"
+          description="Try adjusting your filters or selecting a different date range to see results"
+          icon="search"
+          actionLabel="Reset Filters"
+          onAction={handleReset}
         />
-      </div>
+      ) : (
+        <>
+          <div className="space-y-6">
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <AttendanceTrendChart rows={filteredRows} loading={loading} />
+              <ShiftDistributionChart rows={filteredRows} loading={loading} />
+            </div>
+            
+            <BusComparisonChart rows={filteredRows} loading={loading} />
+            
+            {/* Table Section */}
+            <TripTable rows={filteredRows} loading={loading} />
+            <HeadcountChart rows={filteredRows} loading={loading} />
+          </div>
+
+          <div>
+            <ScanTable
+              initialDate={today}
+              initialBusId={filters.bus_id}
+              initialShift={filters.shift}
+              availableBuses={availableBuses}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

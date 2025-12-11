@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { SPACING, TYPOGRAPHY } from '@/lib/design-system/tokens';
+import { addDays, startOfMonth, format } from 'date-fns';
 
 type FiltersBarProps = {
   filters: FilterParams;
@@ -30,6 +31,9 @@ export default function FiltersBar({
   loading,
   availableBuses
 }: FiltersBarProps) {
+  const shiftValue = filters.shift || 'all';
+  const busValue = filters.bus_id || 'all';
+
   const handleChange = (field: keyof FilterParams, value: string) => {
     onFiltersChange({
       ...filters,
@@ -37,10 +41,78 @@ export default function FiltersBar({
     });
   };
 
+  const handleQuickDate = (days: number | 'month' | 'today') => {
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    
+    let dateFrom: string;
+    let dateTo: string;
+    
+    if (days === 'today') {
+      dateFrom = todayStr;
+      dateTo = todayStr;
+    } else if (days === 'month') {
+      dateFrom = format(startOfMonth(today), 'yyyy-MM-dd');
+      dateTo = todayStr;
+    } else {
+      dateFrom = format(addDays(today, -days), 'yyyy-MM-dd');
+      dateTo = todayStr;
+    }
+    
+    onFiltersChange({
+      ...filters,
+      date_from: dateFrom,
+      date_to: dateTo,
+    });
+  };
+
   const hasActiveFilters = Boolean(filters.shift || filters.bus_id);
 
   return (
     <Card className="p-4 mb-6">
+      {/* Quick Date Selector */}
+      <div className="mb-4 pb-4 border-b border-gray-100">
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-sm text-gray-600 font-medium mr-2">Quick:</span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickDate('today')}
+            disabled={loading}
+            className="text-xs"
+          >
+            Today
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickDate(7)}
+            disabled={loading}
+            className="text-xs"
+          >
+            Last 7 Days
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickDate(30)}
+            disabled={loading}
+            className="text-xs"
+          >
+            Last 30 Days
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickDate('month')}
+            disabled={loading}
+            className="text-xs"
+          >
+            This Month
+          </Button>
+        </div>
+      </div>
+      
       {/* Primary Filters Row */}
       <div className={`flex flex-wrap ${SPACING.inlineLg} items-end mb-4`}>
         {/* Date From */}
@@ -73,13 +145,14 @@ export default function FiltersBar({
             Shift
           </label>
           <Select 
-            value={filters.shift || undefined} 
-            onValueChange={(value) => handleChange('shift', value || '')}
+            value={shiftValue}
+            onValueChange={(value) => handleChange('shift', value === 'all' ? '' : value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="All Shifts" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">All Shifts</SelectItem>
               {SHIFTS.map((shift) => (
                 <SelectItem key={shift.value} value={shift.value}>
                   {shift.label}
@@ -118,13 +191,14 @@ export default function FiltersBar({
               Bus ID
             </label>
             <Select 
-              value={filters.bus_id || undefined} 
-              onValueChange={(value) => handleChange('bus_id', value || '')}
+              value={busValue}
+              onValueChange={(value) => handleChange('bus_id', value === 'all' ? '' : value)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="All Buses" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All Buses</SelectItem>
                 {availableBuses.map((bus) => (
                   <SelectItem key={bus} value={bus}>
                     {bus}

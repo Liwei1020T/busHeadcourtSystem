@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SHIFT_COLORS, TYPOGRAPHY } from '@/lib/design-system/tokens';
+import { AlertTriangle, Clock } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 
 type TripTableProps = {
   rows: HeadcountRow[];
@@ -67,20 +69,56 @@ export default function TripTable({ rows, loading }: TripTableProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row, index) => (
-                <TableRow key={`${row.date}-${row.bus_id}-${row.shift}-${index}`}>
-                  <TableCell className="font-medium">{row.date}</TableCell>
-                  <TableCell>{row.bus_id}</TableCell>
-                  <TableCell>{row.route || '-'}</TableCell>
-                  <TableCell>
-                    <ShiftBadge shift={row.shift} />
-                  </TableCell>
-                  <TableCell className="font-medium">{row.present}</TableCell>
-                  <TableCell>{row.unknown_batch}</TableCell>
-                  <TableCell>{row.unknown_shift}</TableCell>
-                  <TableCell className="font-medium">{row.total}</TableCell>
-                </TableRow>
-              ))
+              rows.map((row, index) => {
+                const hasUnknownBatch = row.unknown_batch > 0;
+                const hasUnknownShift = row.unknown_shift > 0;
+                const hasAnyAnomaly = hasUnknownBatch || hasUnknownShift;
+                
+                return (
+                  <TableRow 
+                    key={`${row.date}-${row.bus_id}-${row.shift}-${index}`}
+                    className={`
+                      transition-colors
+                      ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                      hover:bg-blue-50
+                      ${hasUnknownBatch && hasUnknownShift ? 'border-l-4 border-orange-500 bg-orange-50' : ''}
+                      ${hasUnknownBatch && !hasUnknownShift ? 'border-l-4 border-yellow-500 bg-yellow-50' : ''}
+                      ${hasUnknownShift && !hasUnknownBatch ? 'border-l-4 border-red-500 bg-red-50' : ''}
+                    `}
+                  >
+                    <TableCell className="font-medium py-3">
+                      {format(parseISO(row.date), 'MMM dd, yyyy')}
+                    </TableCell>
+                    <TableCell className="py-3">{row.bus_id}</TableCell>
+                    <TableCell className="py-3">{row.route || '-'}</TableCell>
+                    <TableCell className="py-3">
+                      <ShiftBadge shift={row.shift} />
+                    </TableCell>
+                    <TableCell className="font-medium py-3 text-right">{row.present}</TableCell>
+                    <TableCell className="py-3 text-right">
+                      {hasUnknownBatch ? (
+                        <span className="inline-flex items-center gap-1 text-yellow-700">
+                          <AlertTriangle className="w-4 h-4" />
+                          {row.unknown_batch}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">{row.unknown_batch}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3 text-right">
+                      {hasUnknownShift ? (
+                        <span className="inline-flex items-center gap-1 text-red-700">
+                          <Clock className="w-4 h-4" />
+                          {row.unknown_shift}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500">{row.unknown_shift}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium py-3 text-right">{row.total}</TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

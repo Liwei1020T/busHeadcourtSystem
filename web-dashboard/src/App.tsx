@@ -3,6 +3,7 @@ import BusDashboard from './pages/BusDashboard'
 import EmployeeManagement from './pages/EmployeeManagement'
 import BusManagement from './pages/BusManagement'
 import VanManagement from './pages/VanManagement'
+import { Toaster } from 'react-hot-toast'
 
 type PageKey = 'dashboard' | 'employees' | 'buses' | 'vans'
 
@@ -38,6 +39,32 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans text-gray-900">
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#fff',
+            color: '#111827',
+            padding: '16px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      
       <nav className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
