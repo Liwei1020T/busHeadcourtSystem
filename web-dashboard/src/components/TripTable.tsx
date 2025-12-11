@@ -1,4 +1,9 @@
 import { HeadcountRow } from '../types';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { SHIFT_COLORS, TYPOGRAPHY } from '@/lib/design-system/tokens';
 
 type TripTableProps = {
   rows: HeadcountRow[];
@@ -7,107 +12,79 @@ type TripTableProps = {
 
 function ShiftBadge({ shift }: { shift: string }) {
   const isMorning = shift === 'morning';
-  const color = shift === 'unknown' ? 'bg-gray-100 text-gray-800' : isMorning ? 'bg-green-100 text-green-800' : 'bg-indigo-100 text-indigo-800';
+  const isNight = shift === 'night';
   const label = shift === 'unknown' ? 'Unknown' : isMorning ? 'Morning' : 'Night';
+  
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}>
+    <Badge 
+      variant={isMorning ? 'default' : isNight ? 'secondary' : 'outline'}
+      className={shift === 'unknown' ? SHIFT_COLORS.unknown.badge : ''}
+    >
       {label}
-    </span>
+    </Badge>
   );
 }
 
 export default function TripTable({ rows, loading }: TripTableProps) {
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-10 bg-gray-200 rounded"></div>
-            ))}
-          </div>
+      <Card className="p-6">
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-1/4" />
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
         </div>
-      </div>
+      </Card>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Headcount by Bus/Shift</h3>
+    <Card className="overflow-hidden">
+      <div className="px-6 py-4 border-b">
+        <h3 className={TYPOGRAPHY.sectionTitle}>Headcount by Bus/Shift</h3>
       </div>
       
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Bus ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Route
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Shift
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Present
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Unknown Batch
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Unknown Shift
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Total
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Bus ID</TableHead>
+              <TableHead>Route</TableHead>
+              <TableHead>Shift</TableHead>
+              <TableHead>Present</TableHead>
+              <TableHead>Unknown Batch</TableHead>
+              <TableHead>Unknown Shift</TableHead>
+              <TableHead>Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-gray-500 py-8">
                   No data found. Adjust filters and search again.
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
               rows.map((row, index) => (
-                <tr key={`${row.date}-${row.bus_id}-${row.shift}-${index}`} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {row.date}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {row.bus_id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {row.route || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                <TableRow key={`${row.date}-${row.bus_id}-${row.shift}-${index}`}>
+                  <TableCell className="font-medium">{row.date}</TableCell>
+                  <TableCell>{row.bus_id}</TableCell>
+                  <TableCell>{row.route || '-'}</TableCell>
+                  <TableCell>
                     <ShiftBadge shift={row.shift} />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {row.present}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {row.unknown_batch}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {row.unknown_shift}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {row.total}
-                  </td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="font-medium">{row.present}</TableCell>
+                  <TableCell>{row.unknown_batch}</TableCell>
+                  <TableCell>{row.unknown_shift}</TableCell>
+                  <TableCell className="font-medium">{row.total}</TableCell>
+                </TableRow>
               ))
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
-    </div>
+    </Card>
   );
 }
