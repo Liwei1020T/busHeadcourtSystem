@@ -5,6 +5,9 @@ import TripTable from '../components/TripTable';
 import ScanTable from '../components/ScanTable';
 import { exportHeadcountCsv, fetchHeadcount } from '../api';
 import { HeadcountResponse, FilterParams } from '../types';
+import { Button } from '@/components/ui/button';
+import { SPACING, TYPOGRAPHY } from '@/lib/design-system/tokens';
+import { useToast } from '@/contexts/ToastContext';
 
 // Get today's date in YYYY-MM-DD format
 function getTodayString(): string {
@@ -29,12 +32,12 @@ const getInitialFilters = (): FilterParams => ({
 
 export default function BusDashboard() {
   const today = getTodayString();
+  const { showToast } = useToast();
   
   const [filters, setFilters] = useState<FilterParams>(getInitialFilters());
 
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   
   const [headcount, setHeadcount] = useState<HeadcountResponse>({
     rows: [],
@@ -86,7 +89,6 @@ export default function BusDashboard() {
 
   const handleSearch = async (overrideFilters?: FilterParams) => {
     setLoading(true);
-    setError(null);
 
     const activeFilters = overrideFilters || filters;
 
@@ -99,8 +101,10 @@ export default function BusDashboard() {
         bus_id: activeFilters.bus_id,
       });
       setHeadcount(data);
+      showToast('success', 'Data loaded successfully');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      const message = err instanceof Error ? err.message : 'Failed to load data';
+      showToast('error', message);
       setHeadcount({ rows: [] });
     } finally {
       setLoading(false);
@@ -131,7 +135,6 @@ export default function BusDashboard() {
 
   const handleHeadcountExport = async () => {
     setExporting(true);
-    setError(null);
     try {
       await exportHeadcountCsv({
         date_from: filters.date_from,
@@ -139,8 +142,10 @@ export default function BusDashboard() {
         shift: filters.shift || undefined,
         bus_id: filters.bus_id || undefined,
       });
+      showToast('success', 'Headcount CSV downloaded successfully');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to export headcount');
+      const message = err instanceof Error ? err.message : 'Failed to export headcount';
+      showToast('error', message);
     } finally {
       setExporting(false);
     }
@@ -151,14 +156,14 @@ export default function BusDashboard() {
   const showingFiltered = hasLocalFilters && filteredRows.length !== headcount.rows.length;
 
   return (
-    <div className="space-y-6">
+    <div className={SPACING.section}>
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Bus Passenger Dashboard</h1>
-          <p className="text-sm text-gray-500">Factory Bus Optimization System</p>
+          <h1 className={TYPOGRAPHY.pageTitle}>Bus Passenger Dashboard</h1>
+          <p className={TYPOGRAPHY.pageSubtitle}>Factory Bus Optimization System</p>
         </div>
         <div className="text-right">
-          <p className="text-sm text-gray-500">Today</p>
+          <p className={TYPOGRAPHY.kpiLabel}>Today</p>
           <p className="text-lg font-semibold text-gray-900">{today}</p>
         </div>
       </div>
@@ -174,20 +179,14 @@ export default function BusDashboard() {
       />
 
       <div className="flex flex-wrap justify-end gap-2 -mt-4 mb-2">
-        <button
+        <Button
           onClick={handleHeadcountExport}
           disabled={exporting}
-          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="outline"
         >
           {exporting ? 'Downloading...' : 'Download Headcount CSV'}
-        </button>
+        </Button>
       </div>
-
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-          {error}
-        </div>
-      )}
 
       {showingFiltered && (
         <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-700 text-sm">

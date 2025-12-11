@@ -1,3 +1,6 @@
+import { Card } from '@/components/ui/card';
+import { KPI_COLORS, TYPOGRAPHY } from '@/lib/design-system/tokens';
+
 type KpiCardProps = {
   title: string;
   value: string | number | null;
@@ -6,28 +9,22 @@ type KpiCardProps = {
   color?: 'blue' | 'green' | 'yellow' | 'red';
 };
 
-const colorClasses = {
-  blue: 'bg-blue-50 text-blue-700 border-blue-200',
-  green: 'bg-green-50 text-green-700 border-green-200',
-  yellow: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  red: 'bg-red-50 text-red-700 border-red-200',
-};
-
 export default function KpiCard({ title, value, subtitle, icon, color = 'blue' }: KpiCardProps) {
   const displayValue = value === null || value === undefined ? '-' : value;
+  const colors = KPI_COLORS[color];
   
   return (
-    <div className={`bg-white rounded-lg shadow p-6 border-l-4 ${colorClasses[color]}`}>
+    <Card className={`p-6 border-l-4 ${colors.bg} ${colors.border}`}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+          <p className={TYPOGRAPHY.labelUppercase}>
             {title}
           </p>
-          <p className="mt-2 text-3xl font-bold text-gray-900">
+          <p className={`mt-2 ${TYPOGRAPHY.kpiValue} text-gray-900`}>
             {displayValue}
           </p>
           {subtitle && (
-            <p className="mt-1 text-sm text-gray-500">
+            <p className={`mt-1 ${TYPOGRAPHY.kpiLabel}`}>
               {subtitle}
             </p>
           )}
@@ -38,6 +35,6 @@ export default function KpiCard({ title, value, subtitle, icon, color = 'blue' }
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
