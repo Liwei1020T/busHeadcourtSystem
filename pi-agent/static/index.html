@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Agent - Card Scanning</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding-top: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            color: #333;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 0.95rem;
+            color: #666;
+        }
+
+        .scan-box {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 30px;
+        }
+
+        .scan-box h2 {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .scan-input-group {
+            margin-bottom: 15px;
+        }
+
+        .scan-input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-size: 0.9rem;
+        }
+
+        .scan-input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+
+        .scan-input-group input:focus {
+            outline: none;
+            border-color: #4a5568;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 3px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: #4a5568;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2d3748;
+        }
+
+        .btn-primary:active {
+            background: #1a202c;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 3px;
+            color: white;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            max-width: 350px;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast.success {
+            background: #48bb78;
+        }
+
+        .toast.error {
+            background: #f56565;
+        }
+
+        .toast.info {
+            background: #4299e1;
+        }
+
+        .stats {
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid #e5e5e5;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: #fafafa;
+            padding: 12px;
+            border: 1px solid #e5e5e5;
+            border-radius: 3px;
+            text-align: center;
+        }
+
+        .stat-card h4 {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding-top: 20px;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .scan-box {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Card Scanning System</h1>
+            <p>Pi Agent - Bus Card Reader</p>
+        </div>
+
+        <div class="scan-box">
+            <h2>Batch ID Scan</h2>
+
+            <div class="scan-input-group">
+                <label for="batchIdInput">Enter Batch ID:</label>
+                <input 
+                    type="number" 
+                    id="batchIdInput" 
+                    placeholder="Batch ID" 
+                    min="1"
+                    autofocus
+                >
+            </div>
+
+            <button class="btn btn-primary" onclick="submitScan()">
+                Submit Scan
+            </button>
+
+            <div class="stats">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h4>Today's Scans</h4>
+                        <div class="value" id="todayCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <h4>Pending Upload</h4>
+                        <div class="value" id="pendingCount">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API Base URL
+        const API_BASE = window.location.origin;
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            
+            // Auto-focus on input
+            document.getElementById('batchIdInput').focus();
+
+            // Submit on Enter key
+            document.getElementById('batchIdInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    submitScan();
+                }
+            });
+
+            // Refresh stats every 10 seconds
+            setInterval(loadStats, 10000);
+        });
+
+        // Show toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/status`);
+                const data = await response.json();
+
+                document.getElementById('pendingCount').textContent = data.scan_counts.pending;
+                
+                // Get today's count (uploaded + pending)
+                const totalToday = data.scan_counts.uploaded + data.scan_counts.pending;
+                document.getElementById('todayCount').textContent = totalToday;
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Submit scan
+        async function submitScan() {
+            const input = document.getElementById('batchIdInput');
+            const batchId = input.value.trim();
+
+            if (!batchId) {
+                showToast('Please enter batch ID', 'error');
+                input.focus();
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/scan/test`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        batch_id: parseInt(batchId)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showToast(`Scan successful: ${batchId}`, 'success');
+                    input.value = '';
+                    input.focus();
+                    
+                    // Update stats
+                    await loadStats();
+                } else {
+                    showToast(data.message || 'Scan failed', 'error');
+                    input.select();
+                }
+            } catch (error) {
+                console.error('Scan failed:', error);
+                showToast('Scan failed: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

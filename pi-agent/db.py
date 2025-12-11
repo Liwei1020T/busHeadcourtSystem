@@ -144,3 +144,34 @@ def get_scan_count() -> Dict[str, int]:
     conn.close()
     
     return {"pending": pending, "uploaded": uploaded}
+
+
+def get_recent_scans(limit: int = 50) -> List[Dict]:
+    """
+    Get recent scans (both uploaded and pending).
+    Returns up to 'limit' records, ordered by most recent first.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT id, batch_id, card_uid, scan_time, uploaded
+        FROM scans
+        ORDER BY id DESC
+        LIMIT ?
+    """, (limit,))
+    
+    rows = cursor.fetchall()
+    conn.close()
+    
+    result = []
+    for row in rows:
+        result.append({
+            "id": row["id"],
+            "batch_id": row["batch_id"],
+            "card_uid": row["card_uid"],
+            "scan_time": row["scan_time"],
+            "uploaded": bool(row["uploaded"])
+        })
+    
+    return result
