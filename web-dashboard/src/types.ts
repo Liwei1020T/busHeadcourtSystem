@@ -34,3 +34,53 @@ export type FilterParams = {
   shift: string;
   bus_id: string;
 };
+
+export type BusInfo = {
+  bus_id: string;
+  plate_number?: string | null;
+  route?: string | null;
+  capacity?: number | null;
+};
+
+export type BusInput = {
+  bus_id: string;
+  route: string;
+  plate_number?: string | null;
+  capacity?: number | null;
+};
+
+export type EmployeeInfo = {
+  id: number;
+  batch_id: number;
+  name: string;
+  bus_id: string;
+  van_id?: number | null;
+  active: boolean;
+};
+
+export type EmployeeInput = {
+  batch_id: number;
+  name: string;
+  bus_id: string;
+  van_id?: number | null;
+  active: boolean;
+};
+
+export type VanInfo = {
+  id: number;
+  van_code: string;
+  bus_id: string;
+  plate_number?: string | null;
+  driver_name?: string | null;
+  capacity?: number | null;
+  active: boolean;
+};
+
+export type VanInput = {
+  van_code: string;
+  bus_id: string;
+  plate_number?: string | null;
+  driver_name?: string | null;
+  capacity?: number | null;
+  active: boolean;
+};

@@ -58,6 +58,16 @@ class VanInfo(BaseModel):
         from_attributes = True
 
 
+class VanCreate(BaseModel):
+    """Create/update payload for vans."""
+    van_code: str
+    bus_id: str
+    plate_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    capacity: Optional[int] = None
+    active: bool = True
+
+
 class EmployeeInfo(BaseModel):
     """Schema for employee information."""
     id: int
