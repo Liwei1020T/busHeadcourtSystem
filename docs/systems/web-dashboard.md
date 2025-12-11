@@ -23,12 +23,14 @@ The Web Dashboard is a modern Single Page Application (SPA) built with React. It
 - **`KpiCard.tsx`**: Displays key performance indicators (e.g., Total Present).
 - **`TripTable.tsx`**: Displays trip summaries.
 - **`ScanTable.tsx`**: Displays detailed scan logs with inline filters (date required; optional bus and shift). It inherits the dashboard’s current bus/shift filters on load and reloads data when any of its filters change.
+- **`HeadcountChart.tsx`**: Visualizes headcount totals by date and shift using the active dashboard filters.
 
 ### 3. API Integration (`src/api.ts`)
 - Centralized module for making HTTP requests to the Backend API.
 
 ## Features
 - **Real-time Monitoring**: View current headcount and attendance status with live filters
+- **Headcount Visualization**: Line graph by date/shift that mirrors the headcount table filters and totals
 - **Data Management**: CRUD forms and tables for Buses, Employees, and Vans with toast notifications
 - **Persistent Filters**: Filter state saved to localStorage across browser sessions
 - **Toast Notifications**: User feedback for async operations (success, error, warning, info)

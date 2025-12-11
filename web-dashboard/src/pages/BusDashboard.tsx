@@ -3,6 +3,7 @@ import FiltersBar from '../components/FiltersBar';
 import KpiCard from '../components/KpiCard';
 import TripTable from '../components/TripTable';
 import ScanTable from '../components/ScanTable';
+import HeadcountChart from '../components/HeadcountChart';
 import { exportHeadcountCsv, fetchHeadcount } from '../api';
 import { HeadcountResponse, FilterParams } from '../types';
 import { Button } from '@/components/ui/button';
@@ -227,28 +228,7 @@ export default function BusDashboard() {
         </div>
 
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow p-6 h-full min-h-[300px] flex flex-col">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Analytics</h3>
-            <div className="flex-1 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-              <div className="text-center text-gray-400">
-                <svg
-                  className="mx-auto h-12 w-12 mb-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                  />
-                </svg>
-                <p className="text-sm">Chart area (placeholder)</p>
-                <p className="text-xs mt-1">Future analytics visualization</p>
-              </div>
-            </div>
-          </div>
+          <HeadcountChart rows={filteredRows} loading={loading} />
         </div>
       </div>
 
