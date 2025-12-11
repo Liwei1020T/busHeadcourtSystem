@@ -222,14 +222,9 @@ export default function BusDashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <TripTable rows={filteredRows} loading={loading} />
-        </div>
-
-        <div className="lg:col-span-1">
-          <HeadcountChart rows={filteredRows} loading={loading} />
-        </div>
+      <div className="space-y-6">
+        <TripTable rows={filteredRows} loading={loading} />
+        <HeadcountChart rows={filteredRows} loading={loading} />
       </div>
 
       <div>
