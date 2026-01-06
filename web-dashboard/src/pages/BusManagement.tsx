@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BusInfo, BusInput } from '../types';
 import { fetchBuses, saveBus } from '../api';
+import PageHeader from '../components/PageHeader';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Bus, Plus, RefreshCw, Search, Users } from 'lucide-react';
 
 const emptyForm: BusInput = {
   bus_id: '',
@@ -106,110 +111,135 @@ export default function BusManagement() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div>
-          <p className="text-sm text-gray-500">Admin</p>
-          <h1 className="text-2xl font-bold text-gray-900">Bus Management</h1>
-          <p className="text-sm text-gray-500">Keep bus details and capacity up to date.</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleNew}
-            className="px-4 py-2 rounded-md bg-white border border-gray-200 text-gray-700 shadow-sm hover:bg-gray-50"
-          >
-            New bus
-          </button>
-          <button
-            onClick={loadBuses}
-            disabled={loading}
-            className="px-4 py-2 rounded-md bg-primary-600 text-white shadow-sm hover:bg-primary-700 disabled:opacity-60"
-          >
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Bus Management"
+        subtitle="Keep bus details and capacity up to date."
+        badge="Admin"
+        rightContent={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleNew}>
+              <Plus className="w-4 h-4 mr-1" />
+              New bus
+            </Button>
+            <Button onClick={loadBuses} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50">
+              <Bus className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase">Total buses</p>
+              <p className="text-2xl font-bold text-gray-900">{buses.length}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-teal-50 to-cyan-50">
+              <Users className="w-5 h-5 text-teal-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase">Total capacity</p>
+              <p className="text-2xl font-bold text-teal-600">{totalCapacity}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50">
+              <Bus className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase">Plates filled</p>
+              <p className="text-2xl font-bold text-emerald-600">
+                {buses.filter((b) => b.plate_number).length}
+              </p>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-xs text-gray-500">Total buses</p>
-          <p className="text-2xl font-semibold text-gray-900">{buses.length}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-xs text-gray-500">Total capacity (seats)</p>
-          <p className="text-2xl font-semibold text-gray-900">{totalCapacity}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-xs text-gray-500">Plate numbers filled</p>
-          <p className="text-2xl font-semibold text-gray-900">
-            {buses.filter((b) => b.plate_number).length}
-          </p>
-        </div>
-      </div>
-
+      {/* Messages */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
           {error}
         </div>
       )}
 
       {message && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-3 text-sm text-green-700">
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-700">
           {message}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className={`lg:col-span-2 bg-white rounded-lg shadow p-4 ${mobileView === 'form' ? 'hidden lg:block' : 'block'}`}>
-          <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
-            <input
-              type="text"
-              placeholder="Search bus, route, or plate"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full sm:w-80 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-            <p className="text-sm text-gray-500">Click a row to edit.</p>
+        {/* Bus Table */}
+        <Card className={`lg:col-span-2 overflow-hidden ${mobileView === 'form' ? 'hidden lg:block' : 'block'}`}>
+          <div className="p-4 bg-gradient-to-r from-emerald-50/50 to-white border-b border-emerald-100">
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+              <div className="flex-1 min-w-[200px] relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search bus, route, or plate"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <p className="text-sm text-gray-500">Click a row to edit.</p>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bus ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Route</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plate</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Bus ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Route</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Plate</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Capacity</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                      <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
                       Loading buses...
                     </td>
                   </tr>
                 ) : filteredBuses.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                       No buses match the current search.
                     </td>
                   </tr>
                 ) : (
-                  filteredBuses.map((bus) => (
+                  filteredBuses.map((bus, index) => (
                     <tr
                       key={bus.bus_id}
-                      className={`${selected?.bus_id === bus.bus_id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                      className={`${selected?.bus_id === bus.bus_id ? 'bg-emerald-50' : index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-emerald-50/50 transition-colors`}
                     >
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{bus.bus_id}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{bus.route || '-'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{bus.plate_number || '-'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">{bus.capacity ?? '-'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-sm">
+                      <td className="px-4 py-3.5 whitespace-nowrap text-sm font-semibold text-gray-900">{bus.bus_id}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-sm text-gray-700">{bus.route || '-'}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-sm text-gray-500">{bus.plate_number || '-'}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-sm text-gray-900">{bus.capacity ?? '-'}</td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-sm">
                         <button
                           onClick={() => handleSelect(bus)}
-                          className="text-primary-700 hover:text-primary-900 font-medium"
+                          className="text-emerald-600 hover:text-emerald-700 font-medium"
                         >
                           Edit
                         </button>
@@ -220,17 +250,18 @@ export default function BusManagement() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
 
-        <div className={`bg-white rounded-lg shadow p-4 ${mobileView === 'list' ? 'hidden lg:block' : 'block'}`}>
-          <div className="mb-4 flex items-center justify-between">
+        {/* Form Panel */}
+        <Card className={`p-5 ${mobileView === 'list' ? 'hidden lg:block' : 'block'}`}>
+          <div className="mb-5 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">{selected ? 'Edit bus' : 'Add bus'}</h2>
               <p className="text-sm text-gray-500">Bus ID is unique.</p>
             </div>
-            <button 
+            <button
               onClick={() => setMobileView('list')}
-              className="lg:hidden text-sm font-medium text-primary-600 hover:text-primary-800"
+              className="lg:hidden text-sm font-medium text-emerald-600 hover:text-emerald-700"
             >
               Back to list
             </button>
@@ -238,41 +269,38 @@ export default function BusManagement() {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Bus ID</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Bus ID</label>
+              <Input
                 type="text"
                 value={form.bus_id}
                 onChange={(e) => setForm({ ...form, bus_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="e.g. A01"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Route</label>
+              <Input
                 type="text"
                 value={form.route}
                 onChange={(e) => setForm({ ...form, route: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Route name"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Plate number (optional)</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Plate number (optional)</label>
+              <Input
                 type="text"
                 value={form.plate_number || ''}
                 onChange={(e) => setForm({ ...form, plate_number: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="e.g. ABC1234"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Capacity</label>
-              <input
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Capacity</label>
+              <Input
                 type="number"
                 min={0}
                 value={form.capacity ?? ''}
@@ -282,20 +310,15 @@ export default function BusManagement() {
                     capacity: e.target.value === '' ? undefined : Number(e.target.value),
                   })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Seats"
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full px-4 py-2 bg-primary-600 text-white font-medium rounded-md shadow-sm hover:bg-primary-700 disabled:opacity-60"
-            >
+            <Button type="submit" disabled={saving} className="w-full">
               {saving ? 'Saving...' : selected ? 'Update bus' : 'Create bus'}
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
       </div>
     </div>
   );

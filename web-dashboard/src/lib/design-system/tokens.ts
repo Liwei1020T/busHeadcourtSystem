@@ -1,77 +1,85 @@
 /**
- * Design System Tokens
+ * Design System Tokens - Enterprise Dark Theme
  * Centralized design tokens for consistent styling across the application
  */
 
 // Shift color mappings (used in badges and status indicators)
 export const SHIFT_COLORS = {
   morning: {
-    bg: 'bg-green-100',
-    text: 'text-green-800',
-    badge: 'bg-green-100 text-green-800',
+    bg: 'bg-emerald-500/20',
+    text: 'text-emerald-400',
+    badge: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
   },
   night: {
-    bg: 'bg-indigo-100',
-    text: 'text-indigo-800',
-    badge: 'bg-indigo-100 text-indigo-800',
+    bg: 'bg-indigo-500/20',
+    text: 'text-indigo-400',
+    badge: 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30',
   },
   unknown: {
-    bg: 'bg-gray-100',
-    text: 'text-gray-800',
-    badge: 'bg-gray-100 text-gray-800',
+    bg: 'bg-slate-600/30',
+    text: 'text-slate-400',
+    badge: 'bg-slate-600/30 text-slate-400 border border-slate-500/30',
   },
 } as const;
 
 // Status color mappings
 export const STATUS_COLORS = {
   present: {
-    bg: 'bg-green-100',
-    text: 'text-green-800',
-    badge: 'bg-green-100 text-green-800',
+    bg: 'bg-emerald-500/20',
+    text: 'text-emerald-400',
+    badge: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
   },
   unknown_batch: {
-    bg: 'bg-yellow-100',
-    text: 'text-yellow-800',
-    badge: 'bg-yellow-100 text-yellow-800',
+    bg: 'bg-amber-500/20',
+    text: 'text-amber-400',
+    badge: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
   },
   unknown_shift: {
-    bg: 'bg-red-100',
-    text: 'text-red-800',
-    badge: 'bg-red-100 text-red-800',
+    bg: 'bg-rose-500/20',
+    text: 'text-rose-400',
+    badge: 'bg-rose-500/20 text-rose-400 border border-rose-500/30',
   },
   active: {
-    bg: 'bg-green-100',
-    text: 'text-green-800',
-    badge: 'bg-green-100 text-green-800',
+    bg: 'bg-emerald-500/20',
+    text: 'text-emerald-400',
+    badge: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
   },
   inactive: {
-    bg: 'bg-gray-200',
-    text: 'text-gray-700',
-    badge: 'bg-gray-200 text-gray-700',
+    bg: 'bg-slate-600/30',
+    text: 'text-slate-400',
+    badge: 'bg-slate-600/30 text-slate-400 border border-slate-500/30',
   },
 } as const;
 
-// KPI card color mappings
+// KPI card color mappings - Dark theme with glow
 export const KPI_COLORS = {
   blue: {
-    bg: 'bg-blue-50',
-    text: 'text-blue-700',
-    border: 'border-blue-200',
+    bg: 'gradient-cyan',
+    text: 'text-cyan-400',
+    border: 'border-cyan-500/30',
+    glow: 'glow-cyan',
+    icon: 'text-cyan-400',
   },
   green: {
-    bg: 'bg-green-50',
-    text: 'text-green-700',
-    border: 'border-green-200',
+    bg: 'gradient-emerald',
+    text: 'text-emerald-400',
+    border: 'border-emerald-500/30',
+    glow: 'glow-emerald',
+    icon: 'text-emerald-400',
   },
   yellow: {
-    bg: 'bg-yellow-50',
-    text: 'text-yellow-700',
-    border: 'border-yellow-200',
+    bg: 'gradient-amber',
+    text: 'text-amber-400',
+    border: 'border-amber-500/30',
+    glow: 'glow-amber',
+    icon: 'text-amber-400',
   },
   red: {
-    bg: 'bg-red-50',
-    text: 'text-red-700',
-    border: 'border-red-200',
+    bg: 'gradient-rose',
+    text: 'text-rose-400',
+    border: 'border-rose-500/30',
+    glow: 'glow-rose',
+    icon: 'text-rose-400',
   },
 } as const;
 
@@ -93,32 +101,32 @@ export const LAYOUT = {
   navHeight: 'h-16',
 } as const;
 
-// Typography tokens
+// Typography tokens - Light text for dark theme
 export const TYPOGRAPHY = {
-  pageTitle: 'text-2xl font-bold text-gray-900',
-  pageSubtitle: 'text-sm text-gray-500',
-  sectionTitle: 'text-lg font-semibold text-gray-900',
-  cardTitle: 'text-base font-medium text-gray-900',
-  label: 'text-sm font-medium text-gray-700',
-  labelUppercase: 'text-xs font-medium text-gray-500 uppercase tracking-wider',
-  body: 'text-sm text-gray-900',
-  bodySm: 'text-xs text-gray-600',
-  kpiValue: 'text-2xl font-semibold',
-  kpiLabel: 'text-xs text-gray-500',
+  pageTitle: 'text-2xl font-bold text-slate-100',
+  pageSubtitle: 'text-sm text-slate-400',
+  sectionTitle: 'text-lg font-semibold text-slate-100',
+  cardTitle: 'text-base font-medium text-slate-100',
+  label: 'text-sm font-medium text-slate-300',
+  labelUppercase: 'text-xs font-medium text-slate-400 uppercase tracking-wider',
+  body: 'text-sm text-slate-200',
+  bodySm: 'text-xs text-slate-400',
+  kpiValue: 'text-3xl font-bold',
+  kpiLabel: 'text-xs text-slate-400',
 } as const;
 
 // Border radius tokens
 export const RADIUS = {
-  card: 'rounded-lg',
-  input: 'rounded-md',
+  card: 'rounded-xl',
+  input: 'rounded-lg',
   badge: 'rounded-full',
-  button: 'rounded-md',
+  button: 'rounded-lg',
 } as const;
 
-// Shadow tokens
+// Shadow tokens - Enhanced for dark theme
 export const SHADOW = {
-  card: 'shadow',
-  cardHover: 'shadow-md',
+  card: 'shadow-xl shadow-black/20',
+  cardHover: 'shadow-2xl shadow-black/30',
   none: 'shadow-none',
 } as const;
 
@@ -128,6 +136,17 @@ export const TRANSITION = {
   all: 'transition-all',
   fast: 'transition-all duration-150',
   medium: 'transition-all duration-300',
+} as const;
+
+// Chart colors for dark theme - Neon palette
+export const CHART_COLORS = {
+  primary: '#06b6d4',   // Cyan
+  secondary: '#10b981', // Emerald
+  tertiary: '#f59e0b',  // Amber
+  quaternary: '#a855f7', // Purple
+  quinary: '#f43f5e',   // Rose
+  grid: '#334155',      // Slate-700
+  text: '#94a3b8',      // Slate-400
 } as const;
 
 // Helper function to get shift badge variant
@@ -144,3 +163,4 @@ export function getStatusBadgeVariant(status: string): 'default' | 'secondary' |
   if (status === 'unknown_shift') return 'destructive';
   return 'outline';
 }
+

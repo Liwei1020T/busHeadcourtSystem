@@ -8,6 +8,8 @@ import AttendanceTrendChart from '../components/AttendanceTrendChart';
 import BusComparisonChart from '../components/BusComparisonChart';
 import ShiftDistributionChart from '../components/ShiftDistributionChart';
 import EmptyState from '../components/EmptyState';
+import PageHeader from '../components/PageHeader';
+import SectionHeader from '../components/SectionHeader';
 import { exportHeadcountCsv, fetchBuses, fetchHeadcount } from '../api';
 import { HeadcountResponse, FilterParams } from '../types';
 import { Button } from '@/components/ui/button';
@@ -38,14 +40,14 @@ const getInitialFilters = (): FilterParams => ({
 
 export default function BusDashboard() {
   const today = getTodayString();
-  
+
   const [filters, setFilters] = useState<FilterParams>(getInitialFilters());
   const filtersRef = useRef<FilterParams>(getInitialFilters());
 
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [busOptions, setBusOptions] = useState<string[]>([]);
-  
+
   const [headcount, setHeadcount] = useState<HeadcountResponse>({
     rows: [],
   });
@@ -131,7 +133,7 @@ export default function BusDashboard() {
         bus_id: activeFilters.bus_id,
       });
       setHeadcount(data);
-      toast.success(`Loaded ${data.rows.length} records successfully`);
+      toast.success(`Loaded ${data.rows.length} records successfully`, { id: 'load-success' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load data';
       toast.error(message);
@@ -196,7 +198,7 @@ export default function BusDashboard() {
   const handleHeadcountExport = async () => {
     setExporting(true);
     const toastId = toast.loading('Generating CSV...');
-    
+
     try {
       await exportHeadcountCsv({
         date_from: filters.date_from,
@@ -222,16 +224,16 @@ export default function BusDashboard() {
 
   return (
     <div className={SPACING.section}>
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div>
-          <h1 className={TYPOGRAPHY.pageTitle}>Bus Passenger Dashboard</h1>
-          <p className={TYPOGRAPHY.pageSubtitle}>Factory Bus Optimization System</p>
-        </div>
-        <div className="text-right">
-          <p className={TYPOGRAPHY.kpiLabel}>Today</p>
-          <p className="text-lg font-semibold text-gray-900">{today}</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Bus Passenger Dashboard"
+        subtitle="Factory Bus Optimization System"
+        rightContent={
+          <div className="text-right">
+            <p className="text-xs text-slate-400">Today</p>
+            <p className="text-lg font-semibold text-cyan-400">{today}</p>
+          </div>
+        }
+      />
 
       <FiltersBar
         filters={filters}
@@ -254,40 +256,52 @@ export default function BusDashboard() {
       </div>
 
       {showingFiltered && (
-        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-700 text-sm">
+        <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-emerald-700 text-sm">
           Showing <strong>{filteredRows.length}</strong> of <strong>{headcount.rows.length}</strong> rows with the bus filter applied
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          title="Total Present"
-          value={filteredKpis.total_present ?? '-'}
-          subtitle={showingFiltered ? 'filtered results' : 'in selected period'}
-          color="blue"
-          icon={<Users className="w-8 h-8" />}
-        />
-        <KpiCard
-          title="Unknown Batch"
-          value={filteredKpis.total_unknown_batch ?? '-'}
-          subtitle="needs mapping"
-          color="yellow"
-          icon={<AlertTriangle className="w-8 h-8" />}
-        />
-        <KpiCard
-          title="Unknown Shift"
-          value={filteredKpis.total_unknown_shift ?? '-'}
-          subtitle="outside shift window"
-          color="red"
-          icon={<Clock className="w-8 h-8" />}
-        />
-        <KpiCard
-          title="Row Count"
-          value={filteredKpis.row_count ?? '-'}
-          subtitle={showingFiltered ? `of ${headcount.rows.length} total` : 'aggregated rows'}
-          color="green"
-          icon={<Database className="w-8 h-8" />}
-        />
+      {/* KPI Section - Hero + Compact Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* Hero KPI - Total Present */}
+        <div className="lg:col-span-1">
+          <KpiCard
+            title="Total Present"
+            value={filteredKpis.total_present}
+            subtitle={showingFiltered ? 'filtered results' : 'in selected period'}
+            color="green"
+            icon={<Users className="w-10 h-10" />}
+            variant="hero"
+          />
+        </div>
+
+        {/* Secondary KPIs - Compact Grid */}
+        <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <KpiCard
+            title="Unknown Batch"
+            value={filteredKpis.total_unknown_batch}
+            subtitle="needs mapping"
+            color="amber"
+            icon={<AlertTriangle className="w-5 h-5" />}
+            variant="compact"
+          />
+          <KpiCard
+            title="Unknown Shift"
+            value={filteredKpis.total_unknown_shift}
+            subtitle="outside window"
+            color="red"
+            icon={<Clock className="w-5 h-5" />}
+            variant="compact"
+          />
+          <KpiCard
+            title="Row Count"
+            value={filteredKpis.row_count}
+            subtitle={showingFiltered ? `of ${headcount.rows.length}` : 'aggregated'}
+            color="green"
+            icon={<Database className="w-5 h-5" />}
+            variant="compact"
+          />
+        </div>
       </div>
 
       {filteredRows.length === 0 && !loading ? (
@@ -299,30 +313,58 @@ export default function BusDashboard() {
           onAction={handleReset}
         />
       ) : (
-        <>
-          <div className="space-y-6">
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <AttendanceTrendChart rows={filteredRows} loading={loading} />
-              <ShiftDistributionChart rows={filteredRows} loading={loading} />
-            </div>
-            
-            <BusComparisonChart rows={filteredRows} loading={loading} />
-            
-            {/* Table Section */}
-            <TripTable rows={filteredRows} loading={loading} />
-            <HeadcountChart rows={filteredRows} loading={loading} />
-          </div>
+        <div className="space-y-8">
+          {/* Charts Section */}
+          <section>
+            <SectionHeader title="Analytics" color="emerald" />
 
-          <div>
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              {/* Main Chart - Attendance Trend */}
+              <div className="xl:col-span-2 h-full">
+                <AttendanceTrendChart rows={filteredRows} loading={loading} />
+              </div>
+
+              {/* Side Charts - Shift Distribution */}
+              <div className="xl:col-span-1 h-full">
+                <ShiftDistributionChart rows={filteredRows} loading={loading} />
+              </div>
+            </div>
+
+            {/* Full Width Bus Comparison */}
+            <div className="mt-6">
+              <BusComparisonChart rows={filteredRows} loading={loading} />
+            </div>
+          </section>
+
+          {/* Data Tables Section */}
+          <section>
+            <SectionHeader title="Data Tables" color="emerald" />
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {/* Trip Summary Table */}
+              <div className="xl:col-span-1 h-full">
+                <TripTable rows={filteredRows} loading={loading} />
+              </div>
+
+              {/* Headcount Chart */}
+              <div className="xl:col-span-1 h-full">
+                <HeadcountChart rows={filteredRows} loading={loading} />
+              </div>
+            </div>
+          </section>
+
+          {/* Detailed Scan Records */}
+          <section>
+            <SectionHeader title="Scan Records" color="amber" />
+
             <ScanTable
               initialDate={today}
               initialBusId={filters.bus_id}
               initialShift={filters.shift}
               availableBuses={availableBuses}
             />
-          </div>
-        </>
+          </section>
+        </div>
       )}
     </div>
   );

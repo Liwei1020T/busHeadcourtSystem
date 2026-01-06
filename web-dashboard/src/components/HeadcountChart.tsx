@@ -3,7 +3,7 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import { HeadcountRow } from '../types';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TYPOGRAPHY } from '@/lib/design-system/tokens';
+import { TrendingUp, BarChart3 } from 'lucide-react';
 
 type HeadcountChartProps = {
   rows: HeadcountRow[];
@@ -23,8 +23,8 @@ type ChartDay = {
 
 const SHIFT_COLORS: Record<ShiftKey, string> = {
   morning: '#10b981',
-  night: '#6366f1',
-  unknown: '#94a3b8',
+  night: '#14b8a6',
+  unknown: '#f59e0b',
 };
 
 function formatDateLabel(date: string): string {
@@ -84,7 +84,7 @@ export default function HeadcountChart({ rows, loading }: HeadcountChartProps) {
   const renderChart = () => {
     if (chartData.length === 0) {
       return (
-        <div className="flex min-h-[280px] items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-600">
+        <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-500">
           No headcount data to visualize. Adjust filters and search again.
         </div>
       );
@@ -96,24 +96,34 @@ export default function HeadcountChart({ rows, loading }: HeadcountChartProps) {
         <XAxis
           dataKey="date"
           tickFormatter={formatDateLabel}
-          tick={{ fill: '#475569', fontSize: 12 }}
+          tick={{ fill: '#6b7280', fontSize: 12 }}
           tickMargin={8}
+          stroke="#d1d5db"
         />
         <YAxis
-          tick={{ fill: '#475569', fontSize: 12 }}
+          tick={{ fill: '#6b7280', fontSize: 12 }}
           allowDecimals={false}
+          stroke="#d1d5db"
         />
         <Tooltip
           labelFormatter={(label) => `Date: ${formatDateLabel(String(label))}`}
           formatter={(value) => (Number.isFinite(value) ? Number(value).toLocaleString() : value)}
+          contentStyle={{
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            border: '1px solid rgba(16, 185, 129, 0.2)',
+            borderRadius: '12px',
+            color: '#1f2937',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+          }}
+          labelStyle={{ color: '#1f2937', fontWeight: 600 }}
         />
-        <Legend />
+        <Legend wrapperStyle={{ color: '#6b7280' }} />
       </>
     );
 
     return (
-      <div className="w-full overflow-hidden rounded-xl border border-slate-100 bg-white">
-        <ResponsiveContainer width="100%" height={380}>
+      <div className="w-full overflow-hidden rounded-xl border border-gray-100 bg-white">
+        <ResponsiveContainer width="100%" height={300}>
           {chartMode === 'line' ? (
             <LineChart data={chartData} margin={{ top: 16, right: 16, left: 8, bottom: 16 }}>
               {commonAxes}
@@ -135,41 +145,46 @@ export default function HeadcountChart({ rows, loading }: HeadcountChartProps) {
   };
 
   return (
-    <Card className="h-full w-full">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
-        <div>
-          <h3 className={TYPOGRAPHY.sectionTitle}>Headcount Trend</h3>
-          <p className={`${TYPOGRAPHY.bodySm} mt-1`}>
-            Totals by date and shift based on the current filters.
-          </p>
+    <Card className="h-full flex flex-col">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-50 to-teal-50">
+            <TrendingUp className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Headcount Trend</h3>
+            <p className="text-xs text-gray-500">Totals by date and shift</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setChartMode('line')}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-              chartMode === 'line'
-                ? 'bg-sky-600 text-white shadow-sm shadow-sky-100'
-                : 'border border-slate-200 bg-white text-slate-800'
-            }`}
+            className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition ${chartMode === 'line'
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
             type="button"
           >
+            <TrendingUp className="w-3.5 h-3.5" />
             Line
           </button>
           <button
             onClick={() => setChartMode('bar')}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-              chartMode === 'bar'
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-100'
-                : 'border border-slate-200 bg-white text-slate-800'
-            }`}
+            className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition ${chartMode === 'bar'
+              ? 'bg-teal-100 text-teal-700'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
             type="button"
           >
+            <BarChart3 className="w-3.5 h-3.5" />
             Bar
           </button>
         </div>
       </div>
 
-      <div className="space-y-4 p-6">
+      {/* Chart Content */}
+      <div className="flex-1 p-5">
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-4 w-32" />
@@ -178,36 +193,39 @@ export default function HeadcountChart({ rows, loading }: HeadcountChartProps) {
         ) : (
           renderChart()
         )}
+      </div>
 
-        <div className="w-full rounded-lg border border-gray-200 bg-white/90 p-3 shadow-inner shadow-gray-50">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
-              <span className="flex items-center gap-2">
+      {/* Summary Footer */}
+      <div className="px-5 pb-5">
+        <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-2 text-gray-600">
                 <span className="h-2.5 w-6 rounded-full" style={{ background: SHIFT_COLORS.morning }} />
                 Morning
               </span>
-              <span className="text-sm text-gray-900">{totalsByShift.morning}</span>
+              <span className="text-sm font-semibold text-emerald-600">{totalsByShift.morning}</span>
             </div>
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
-              <span className="flex items-center gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-2 text-gray-600">
                 <span className="h-2.5 w-6 rounded-full" style={{ background: SHIFT_COLORS.night }} />
                 Night
               </span>
-              <span className="text-sm text-gray-900">{totalsByShift.night}</span>
+              <span className="text-sm font-semibold text-teal-600">{totalsByShift.night}</span>
             </div>
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
-              <span className="flex items-center gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-2 text-gray-600">
                 <span className="h-2.5 w-6 rounded-full" style={{ background: SHIFT_COLORS.unknown }} />
                 Unknown
               </span>
-              <span className="text-sm text-gray-900">{totalsByShift.unknown}</span>
+              <span className="text-sm font-semibold text-amber-600">{totalsByShift.unknown}</span>
             </div>
-            <div className="flex items-center justify-between text-xs font-semibold text-amber-700 sm:col-span-2">
-              <span className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                Unknown (batch/shift)
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-2 text-amber-600">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                Issues
               </span>
-              <span className="text-sm">{totalsByShift.unknownIssues}</span>
+              <span className="text-sm font-semibold text-amber-600">{totalsByShift.unknownIssues}</span>
             </div>
           </div>
         </div>

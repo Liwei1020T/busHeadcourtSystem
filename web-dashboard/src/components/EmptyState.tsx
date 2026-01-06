@@ -1,6 +1,6 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Database, Search, Calendar } from 'lucide-react';
+import { Database, Search, Calendar, RefreshCw, Filter, CalendarDays } from 'lucide-react';
 
 interface EmptyStateProps {
   title?: string;
@@ -29,8 +29,8 @@ export default function EmptyState({
     <Card className="p-12">
       <div className="flex flex-col items-center justify-center text-center space-y-4">
         {/* Icon */}
-        <div className="p-4 rounded-full bg-gray-100">
-          <Icon className="w-12 h-12 text-gray-400" />
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100">
+          <Icon className="w-12 h-12 text-emerald-500" />
         </div>
 
         {/* Title */}
@@ -47,30 +47,30 @@ export default function EmptyState({
         {onAction && (
           <Button
             onClick={onAction}
-            variant="outline"
             className="mt-4"
           >
+            <RefreshCw className="w-4 h-4 mr-2" />
             {actionLabel}
           </Button>
         )}
 
         {/* Helpful tips */}
         <div className="mt-6 pt-6 border-t border-gray-200 w-full max-w-md">
-          <p className="text-xs font-medium text-gray-700 mb-2">Try the following:</p>
-          <ul className="text-xs text-gray-500 space-y-1 text-left">
-            <li className="flex items-start">
-              <span className="mr-2">•</span>
-              <span>Use the quick date buttons (Today, Last 7 Days, etc.)</span>
-            </li>
-            <li className="flex items-start">
-              <span className="mr-2">•</span>
-              <span>Remove shift or bus filters to see all data</span>
-            </li>
-            <li className="flex items-start">
-              <span className="mr-2">•</span>
-              <span>Expand your date range to include more records</span>
-            </li>
-          </ul>
+          <p className="text-xs font-medium text-gray-700 mb-3">💡 Suggestions</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50/50 border border-emerald-100/50">
+              <CalendarDays className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span className="text-xs text-gray-600">Try quick date buttons</span>
+            </div>
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-teal-50/50 border border-teal-100/50">
+              <Filter className="w-4 h-4 text-teal-600 flex-shrink-0" />
+              <span className="text-xs text-gray-600">Remove some filters</span>
+            </div>
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50/50 border border-emerald-100/50">
+              <Calendar className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span className="text-xs text-gray-600">Expand date range</span>
+            </div>
+          </div>
         </div>
       </div>
     </Card>

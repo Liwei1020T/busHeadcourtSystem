@@ -35,6 +35,12 @@ web-dashboard/.vite/
 
 # OS / editor
 .DS_Store
+._*
 Thumbs.db
 .idea/
 .vscode/
+
+# Local text logs / outputs
+server_log*.txt
+**/server_log*.txt
+db_output.txt

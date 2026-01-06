@@ -4,14 +4,15 @@ import EmployeeManagement from './pages/EmployeeManagement'
 import BusManagement from './pages/BusManagement'
 import VanManagement from './pages/VanManagement'
 import { Toaster } from 'react-hot-toast'
+import { LayoutDashboard, Users, Bus, Truck, Menu, X, Calendar } from 'lucide-react'
 
 type PageKey = 'dashboard' | 'employees' | 'buses' | 'vans'
 
-const tabs: { id: PageKey; label: string }[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'employees', label: 'Employees' },
-  { id: 'buses', label: 'Buses' },
-  { id: 'vans', label: 'Vans' },
+const tabs: { id: PageKey; label: string; icon: React.ReactNode }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+  { id: 'employees', label: 'Employees', icon: <Users className="w-4 h-4" /> },
+  { id: 'buses', label: 'Buses', icon: <Bus className="w-4 h-4" /> },
+  { id: 'vans', label: 'Vans', icon: <Truck className="w-4 h-4" /> },
 ]
 
 function App() {
@@ -38,63 +39,74 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans text-gray-900">
+    <div className="min-h-screen font-sans text-gray-900">
       <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
           style: {
-            background: '#fff',
-            color: '#111827',
-            padding: '16px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            background: '#ffffff',
+            color: '#1f2937',
+            padding: '16px 20px',
+            borderRadius: '16px',
+            border: '1px solid rgba(16, 185, 129, 0.1)',
+            boxShadow: '0 20px 40px -10px rgba(16, 185, 129, 0.15)',
           },
           success: {
             iconTheme: {
               primary: '#10b981',
-              secondary: '#fff',
+              secondary: '#ffffff',
             },
           },
           error: {
             iconTheme: {
               primary: '#ef4444',
-              secondary: '#fff',
+              secondary: '#ffffff',
             },
           },
         }}
       />
-      
-      <nav className="bg-white shadow-sm sticky top-0 z-50">
+
+      {/* Natural Green Navigation */}
+      <nav className="sticky top-0 z-50 glass-light">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <div className="flex-shrink-0 flex flex-col justify-center">
-                <h1 className="text-lg font-bold text-gray-900 leading-tight">Bus Dashboard</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">Factory Bus Optimization System</p>
+                <h1 className="text-lg font-bold leading-tight flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/25">
+                    <Bus className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-gradient font-extrabold">Bus Dashboard</span>
+                </h1>
               </div>
             </div>
-            
+
             {/* Desktop Menu */}
-            <div className="hidden md:flex md:items-center md:space-x-4">
-              <div className="flex bg-gray-100 rounded-lg p-1">
+            <div className="hidden md:flex md:items-center md:space-x-6">
+              <div className="flex bg-emerald-50/80 rounded-2xl p-1.5 gap-1">
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => handleTabClick(tab.id)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                      page === tab.id
-                        ? 'bg-white shadow text-primary-700'
-                        : 'text-gray-600 hover:text-primary-700 hover:bg-gray-200/50'
-                    }`}
+                    className={`px-4 py-2 text-sm font-medium rounded-xl transition-all duration-300 flex items-center gap-2 ${page === tab.id
+                      ? 'bg-white text-emerald-600 shadow-md shadow-emerald-100/50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                      }`}
                   >
+                    {tab.icon}
                     {tab.label}
                   </button>
                 ))}
               </div>
-              <div className="text-right pl-4 border-l border-gray-200">
-                <p className="text-xs text-gray-500">Today</p>
-                <p className="text-sm font-semibold text-gray-900">{today}</p>
+              <div className="flex items-center gap-3 pl-6 border-l border-emerald-200">
+                <div className="p-2 rounded-lg bg-emerald-50">
+                  <Calendar className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Today</p>
+                  <p className="text-sm font-bold text-gray-900">{today}</p>
+                </div>
               </div>
             </div>
 
@@ -102,17 +114,13 @@ function App() {
             <div className="flex items-center md:hidden">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
+                className="inline-flex items-center justify-center p-2.5 rounded-xl text-gray-600 hover:text-gray-900 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all active:scale-95"
+                aria-label="Toggle menu"
               >
-                <span className="sr-only">Open main menu</span>
                 {mobileMenuOpen ? (
-                  <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="w-6 h-6" />
                 ) : (
-                  <svg className="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
+                  <Menu className="w-6 h-6" />
                 )}
               </button>
             </div>
@@ -120,43 +128,49 @@ function App() {
         </div>
 
         {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-t border-gray-200">
-            <div className="px-2 pt-2 pb-3 space-y-1">
+        <div
+          className={`md:hidden transition-all duration-300 ease-in-out overflow-hidden ${mobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+            }`}
+        >
+          <div className="bg-white/95 backdrop-blur-xl border-t border-emerald-100">
+            <div className="px-4 pt-4 pb-5 space-y-2">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => handleTabClick(tab.id)}
-                  className={`block w-full text-left px-3 py-2 rounded-md text-base font-medium ${
-                    page === tab.id
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
+                  className={`flex w-full items-center gap-3 px-4 py-3.5 rounded-xl text-base font-medium transition-all active:scale-[0.98] ${page === tab.id
+                    ? 'bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-600'
+                    : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                    }`}
                 >
+                  <span className={`p-2.5 rounded-xl ${page === tab.id ? 'bg-emerald-100' : 'bg-gray-100'}`}>
+                    {tab.icon}
+                  </span>
                   {tab.label}
                 </button>
               ))}
             </div>
-            <div className="pt-4 pb-4 border-t border-gray-200">
-              <div className="px-4 flex items-center">
-                <div>
-                  <div className="text-base font-medium text-gray-800">Today</div>
-                  <div className="text-sm font-medium text-gray-500">{today}</div>
-                </div>
+            <div className="px-5 py-4 border-t border-emerald-100 flex items-center gap-3 bg-emerald-50/30">
+              <div className="p-2 rounded-lg bg-emerald-100">
+                <Calendar className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div>
+                <div className="text-xs font-medium text-gray-500">Today</div>
+                <div className="text-base font-bold text-gray-900">{today}</div>
               </div>
             </div>
           </div>
-        )}
+        </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {renderPage()}
       </main>
 
-      <footer className="bg-white border-t border-gray-200 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <footer className="bg-white/60 backdrop-blur-sm border-t border-emerald-100/50 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <p className="text-center text-sm text-gray-500">
-            Bus Passenger Counting & Optimization System - Internal Use Only
+            Bus Passenger Counting & Optimization System — Internal Use Only
           </p>
         </div>
       </footer>

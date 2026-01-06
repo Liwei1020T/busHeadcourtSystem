@@ -100,16 +100,19 @@ def handle_card_scan(config: Dict, card_uid: str) -> None:
     scan_time = datetime.now().isoformat()
     
     # Insert into local database
-    inserted = insert_scan(
+    result = insert_scan(
         batch_id=batch_id,
         card_uid=card_uid,
         scan_time=scan_time
     )
     
-    if inserted:
+    if result["inserted"]:
         print(f"SCAN RECORDED: batch_id={batch_id}")
     else:
-        print(f"DUPLICATE: batch_id={batch_id} already scanned at this time")
+        existing_scan = result.get("existing_scan")
+        if existing_scan:
+            first_scan_time = existing_scan.get("scan_time", "unknown time")
+            print(f"DUPLICATE: batch_id={batch_id} already scanned today at {first_scan_time}")
 
 
 def upload_worker(config: Dict) -> None:

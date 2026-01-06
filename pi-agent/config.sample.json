@@ -1,6 +1,6 @@
 {
   "bus_id": "BUS_SP_01",
-  "api_base_url": "http://localhost:8000/api/bus",
+  "api_base_url": "http://localhost:8003/api/bus",
   "api_key": "BUS_SP_01_SECRET",
   "trips": [
     {

@@ -17,10 +17,10 @@ SET TIME ZONE 'Asia/Kuala_Lumpur';
 -- DO $$
 -- BEGIN
 --   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='batch_id') THEN
---     ALTER TABLE employees ALTER COLUMN batch_id TYPE INTEGER USING batch_id::integer;
+--     ALTER TABLE employees ALTER COLUMN batch_id TYPE BIGINT USING batch_id::bigint;
 --   END IF;
 --   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='attendances' AND column_name='scanned_batch_id') THEN
---     ALTER TABLE attendances ALTER COLUMN scanned_batch_id TYPE INTEGER USING scanned_batch_id::integer;
+--     ALTER TABLE attendances ALTER COLUMN scanned_batch_id TYPE BIGINT USING scanned_batch_id::bigint;
 --   END IF;
 -- END $$;
 
@@ -68,7 +68,7 @@ CREATE INDEX idx_vans_bus_id ON vans(bus_id);
 -- ------------------------------------------------------------
 CREATE TABLE employees (
     id        SERIAL PRIMARY KEY,
-    batch_id  INTEGER UNIQUE NOT NULL CHECK (batch_id > 0),
+    batch_id  BIGINT UNIQUE NOT NULL CHECK (batch_id > 0),
     name      VARCHAR(100) NOT NULL,
     bus_id    VARCHAR(10) NOT NULL REFERENCES buses(bus_id) ON DELETE RESTRICT,
     van_id    INTEGER REFERENCES vans(id),
@@ -84,7 +84,7 @@ CREATE INDEX idx_employees_van_id ON employees(van_id);
 -- ------------------------------------------------------------
 CREATE TABLE attendances (
     id               BIGSERIAL PRIMARY KEY,
-    scanned_batch_id INTEGER NOT NULL CHECK (scanned_batch_id > 0),
+    scanned_batch_id BIGINT NOT NULL CHECK (scanned_batch_id > 0),
     employee_id      INTEGER REFERENCES employees(id),
     bus_id           VARCHAR(10) REFERENCES buses(bus_id),
     van_id           INTEGER REFERENCES vans(id),

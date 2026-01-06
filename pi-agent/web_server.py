@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-from db import get_scan_count, get_unuploaded_scans, get_recent_scans, insert_scan
+from db import get_scan_count, get_today_scan_count, get_unuploaded_scans, get_recent_scans, insert_scan, check_duplicate_today
 
 # Configure logging
 logging.basicConfig(
@@ -49,12 +49,14 @@ def get_status():
     Returns:
         {
             "scan_counts": {"pending": int, "uploaded": int},
+            "today_counts": {"pending": int, "uploaded": int, "total": int},
             "config_loaded": bool,
             "bus_id": str
         }
     """
     try:
         counts = get_scan_count()
+        today_counts = get_today_scan_count()
         
         # Try to load config
         config_loaded = os.path.exists(CONFIG_FILE)
@@ -67,6 +69,7 @@ def get_status():
         
         return jsonify({
             "scan_counts": counts,
+            "today_counts": today_counts,
             "config_loaded": config_loaded,
             "bus_id": bus_id,
             "timestamp": datetime.now().isoformat()
@@ -238,13 +241,13 @@ def test_scan():
         card_uid = str(batch_id)
         
         # Insert into database
-        inserted = insert_scan(
+        result = insert_scan(
             batch_id=batch_id,
             card_uid=card_uid,
             scan_time=scan_time
         )
         
-        if inserted:
+        if result["inserted"]:
             logger.info(f"Test scan recorded: batch_id={batch_id}")
             return jsonify({
                 "success": True,
@@ -253,14 +256,52 @@ def test_scan():
                 "scan_time": scan_time
             })
         else:
+            existing_scan = result.get("existing_scan")
+            first_scan_time = existing_scan.get("scan_time", "unknown") if existing_scan else "unknown"
             return jsonify({
                 "success": False,
-                "message": "Duplicate scan detected",
-                "batch_id": batch_id
+                "message": f"Duplicate: batch_id={batch_id} already scanned today",
+                "batch_id": batch_id,
+                "first_scan_time": first_scan_time,
+                "duplicate": True
             }), 409
             
     except Exception as e:
         logger.error(f"Error recording test scan: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/scan/check/<int:batch_id>', methods=['GET'])
+def check_scan_duplicate(batch_id: int):
+    """
+    Check if a batch_id has already been scanned today.
+    
+    Returns:
+        {
+            "duplicate": bool,
+            "existing_scan": {...} or null
+        }
+    """
+    try:
+        existing = check_duplicate_today(batch_id)
+        
+        if existing:
+            return jsonify({
+                "duplicate": True,
+                "batch_id": batch_id,
+                "existing_scan": existing,
+                "message": f"batch_id={batch_id} was already scanned today at {existing['scan_time']}"
+            })
+        else:
+            return jsonify({
+                "duplicate": False,
+                "batch_id": batch_id,
+                "existing_scan": None,
+                "message": f"batch_id={batch_id} has not been scanned today"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error checking scan duplicate: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -281,7 +322,7 @@ def main():
     os.makedirs('static', exist_ok=True)
     
     # Run server
-    port = int(os.getenv('WEB_PORT', 5000))
+    port = int(os.getenv('WEB_PORT', 8080))
     host = os.getenv('WEB_HOST', '0.0.0.0')
     
     logger.info(f"Web interface available at http://{host}:{port}")
