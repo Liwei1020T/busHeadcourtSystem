@@ -6,6 +6,7 @@ export interface FilterParams {
   date_to: string;
   shift: string;
   bus_id: string;
+  route: string;
 }
 
 interface AppContextType {
@@ -46,6 +47,7 @@ const getDefaultFilters = (): FilterParams => ({
   date_to: getTodayString(),
   shift: '',
   bus_id: '',
+  route: '',
 });
 
 // Load filters from localStorage
@@ -53,7 +55,7 @@ function loadFiltersFromStorage(): FilterParams {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      return { ...getDefaultFilters(), ...JSON.parse(stored) } as FilterParams;
     }
   } catch (error) {
     console.error('Failed to load filters from localStorage:', error);

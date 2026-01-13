@@ -484,7 +484,7 @@ export default function ScanTable({
                 <SortableHeader field="scanned_at">Time</SortableHeader>
               </th>
               <th className="px-4 py-3 text-left">
-                <SortableHeader field="batch_id">Batch ID</SortableHeader>
+                <SortableHeader field="batch_id">PersonId</SortableHeader>
               </th>
               <th className="px-4 py-3 text-left">
                 <SortableHeader field="employee_name">Employee</SortableHeader>

@@ -77,6 +77,24 @@ class EmployeeInfo(BaseModel):
     van_id: Optional[int] = None
     active: bool = True
 
+    # Enriched fields from employee master list (optional)
+    date_joined: Optional[str] = None
+    sap_id: Optional[str] = None
+    wdid: Optional[str] = None
+    transport_contractor: Optional[str] = None
+    address1: Optional[str] = None
+    postcode: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    contact_no: Optional[str] = None
+    pickup_point: Optional[str] = None
+    transport: Optional[str] = None
+    route: Optional[str] = None
+    building_id: Optional[str] = None
+    nationality: Optional[str] = None
+    status: Optional[str] = None
+    terminate: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -88,3 +106,34 @@ class EmployeeCreate(BaseModel):
     bus_id: str
     van_id: Optional[int] = None
     active: bool = True
+
+
+class UploadRowError(BaseModel):
+    row_number: int
+    personid: Optional[int] = None
+    message: str
+
+
+class MasterListUploadResponse(BaseModel):
+    processed_rows: int
+    selected_sheet: Optional[str] = None
+    header_row_number: Optional[int] = None
+    buses_upserted: int
+    vans_upserted: int
+    employees_upserted: int
+    unassigned_rows: int = 0
+    skipped_missing_personid: int = 0
+    skipped_missing_name: int = 0
+    row_errors: List[UploadRowError] = []
+
+
+class AttendanceUploadResponse(BaseModel):
+    processed_rows: int
+    selected_sheet: Optional[str] = None
+    header_row_number: Optional[int] = None
+    attendance_inserted: int
+    duplicates_ignored: int
+    unknown_personids: int
+    skipped_no_timein: int = 0
+    skipped_missing_date: int = 0
+    row_errors: List[UploadRowError] = []

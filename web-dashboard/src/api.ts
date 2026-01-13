@@ -12,6 +12,10 @@ import {
   EmployeeInput,
   VanInfo,
   VanInput,
+  MasterListUploadResponse,
+  AttendanceUploadResponse,
+  OccupancyResponse,
+  BusDetailResponse,
 } from './types';
 
 const API_BASE = '/api';
@@ -49,6 +53,7 @@ export async function fetchHeadcount(params: Partial<FilterParams>): Promise<Hea
   if (params.date_to) searchParams.append('date_to', params.date_to);
   if (params.shift) searchParams.append('shift', params.shift);
   if (params.bus_id) searchParams.append('bus_id', params.bus_id);
+  if (params.route) searchParams.append('route', params.route);
   
   const url = `${API_BASE}/report/headcount?${searchParams.toString()}`;
   
@@ -90,6 +95,7 @@ export async function exportHeadcountCsv(params: Partial<FilterParams>): Promise
   if (params.date_to) searchParams.append('date_to', params.date_to);
   if (params.shift) searchParams.append('shift', params.shift);
   if (params.bus_id) searchParams.append('bus_id', params.bus_id);
+  if (params.route) searchParams.append('route', params.route);
 
   const url = `${API_BASE}/report/headcount/export?${searchParams.toString()}`;
   await downloadCsv(url, 'headcount.csv');
@@ -200,6 +206,79 @@ export async function saveVan(payload: VanInput): Promise<VanInfo> {
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`Failed to save van: ${response.statusText} ${detail}`.trim());
+  }
+
+  return response.json();
+}
+
+export async function uploadMasterList(file: File): Promise<MasterListUploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+
+  const response = await fetch(`${API_BASE}/bus/master-list/upload`, {
+    method: 'POST',
+    body: form,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to upload master list: ${response.status} ${detail}`.trim());
+  }
+
+  return response.json();
+}
+
+export async function uploadAttendance(file: File): Promise<AttendanceUploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+
+  const response = await fetch(`${API_BASE}/bus/attendance/upload`, {
+    method: 'POST',
+    body: form,
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to upload attendance: ${response.status} ${detail}`.trim());
+  }
+
+  return response.json();
+}
+
+export async function fetchOccupancy(params: Partial<FilterParams>): Promise<OccupancyResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.date_from) searchParams.append('date_from', params.date_from);
+  if (params.date_to) searchParams.append('date_to', params.date_to);
+  if (params.shift) searchParams.append('shift', params.shift);
+  if (params.bus_id) searchParams.append('bus_id', params.bus_id);
+  if (params.route) searchParams.append('route', params.route);
+
+  const url = `${API_BASE}/report/occupancy?${searchParams.toString()}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch occupancy: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function fetchBusDetail(
+  params: Partial<FilterParams> & { bus_id: string; include_inactive?: boolean },
+): Promise<BusDetailResponse> {
+  const searchParams = new URLSearchParams();
+  if (params.date_from) searchParams.append('date_from', params.date_from);
+  if (params.date_to) searchParams.append('date_to', params.date_to);
+  if (params.shift) searchParams.append('shift', params.shift);
+  if (params.include_inactive) searchParams.append('include_inactive', 'true');
+  searchParams.append('bus_id', params.bus_id);
+
+  const url = `${API_BASE}/report/bus-detail?${searchParams.toString()}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to fetch bus detail: ${response.status} ${detail}`.trim());
   }
 
   return response.json();

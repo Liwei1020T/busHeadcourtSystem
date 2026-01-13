@@ -184,7 +184,7 @@ copy .env.example .env
 python run_server.py
 ```
 
-Backend will be available at: http://localhost:8000
+Backend will be available at: http://localhost:8003
 
 API Documentation: http://localhost:8000/docs
 
@@ -201,7 +201,7 @@ npm install
 npm run dev
 ```
 
-Dashboard will be available at: http://localhost:5173
+Dashboard will be available at: http://localhost:5175
 
 ### 3. Pi Agent Setup
 
@@ -241,7 +241,7 @@ python run_agent.py
 
 ```json
 {
-  "api_base_url": "http://localhost:8000/api/bus",
+  "api_base_url": "http://localhost:8003/api/bus",
   "api_key": "ENTRY_SECRET",
   "upload_interval_seconds": 60
 }

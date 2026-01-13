@@ -6,3 +6,4 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 tzdata>=2023.3
+openpyxl>=3.1.2

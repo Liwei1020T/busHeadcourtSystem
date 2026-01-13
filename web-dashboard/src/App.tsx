@@ -1,33 +1,30 @@
 import { useMemo, useState } from 'react'
+import { format } from 'date-fns'
 import BusDashboard from './pages/BusDashboard'
 import EmployeeManagement from './pages/EmployeeManagement'
-import BusManagement from './pages/BusManagement'
-import VanManagement from './pages/VanManagement'
+import Uploads from './pages/Uploads'
 import { Toaster } from 'react-hot-toast'
-import { LayoutDashboard, Users, Bus, Truck, Menu, X, Calendar } from 'lucide-react'
+import { LayoutDashboard, Users, Bus, Menu, X, Calendar, UploadCloud } from 'lucide-react'
 
-type PageKey = 'dashboard' | 'employees' | 'buses' | 'vans'
+type PageKey = 'dashboard' | 'employees' | 'uploads'
 
 const tabs: { id: PageKey; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
   { id: 'employees', label: 'Employees', icon: <Users className="w-4 h-4" /> },
-  { id: 'buses', label: 'Buses', icon: <Bus className="w-4 h-4" /> },
-  { id: 'vans', label: 'Vans', icon: <Truck className="w-4 h-4" /> },
+  { id: 'uploads', label: 'Uploads', icon: <UploadCloud className="w-4 h-4" /> },
 ]
 
 function App() {
   const [page, setPage] = useState<PageKey>('dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const today = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const today = useMemo(() => format(new Date(), 'yyyy-MM-dd'), [])
 
   const renderPage = () => {
     switch (page) {
       case 'employees':
         return <EmployeeManagement />
-      case 'buses':
-        return <BusManagement />
-      case 'vans':
-        return <VanManagement />
+      case 'uploads':
+        return <Uploads />
       default:
         return <BusDashboard />
     }

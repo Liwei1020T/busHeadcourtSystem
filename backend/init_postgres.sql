@@ -1,31 +1,20 @@
 -- ============================================================
--- Bus Optimizer PostgreSQL schema and seed data
+-- Bus Optimizer: PostgreSQL schema (master-list driven)
 -- Usage:
 --   psql -U <user> -h <host> -p <port> -f init_postgres.sql
---   (ensure you are connected to the target database first)
+--
+-- NOTE: This script DROPS tables for a clean re-init.
 -- ============================================================
 
--- Optional: create the database (uncomment if needed)
--- CREATE DATABASE bus_optimizer;
--- \c bus_optimizer;
+BEGIN;
 
--- Use Kuala Lumpur time for generated dates
 SET TIME ZONE 'Asia/Kuala_Lumpur';
 
--- Legacy helper: if you need to keep data and only convert batch_id to INTEGER,
--- uncomment and run the block below, then skip the DROP statements.
--- DO $$
--- BEGIN
---   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='employees' AND column_name='batch_id') THEN
---     ALTER TABLE employees ALTER COLUMN batch_id TYPE BIGINT USING batch_id::bigint;
---   END IF;
---   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='attendances' AND column_name='scanned_batch_id') THEN
---     ALTER TABLE attendances ALTER COLUMN scanned_batch_id TYPE BIGINT USING scanned_batch_id::bigint;
---   END IF;
--- END $$;
-
+-- ------------------------------------------------------------
 -- Clean existing objects for repeatable runs (drops data)
+-- ------------------------------------------------------------
 DROP TABLE IF EXISTS attendances CASCADE;
+DROP TABLE IF EXISTS employee_master CASCADE;
 DROP TABLE IF EXISTS employees CASCADE;
 DROP TABLE IF EXISTS vans CASCADE;
 DROP TABLE IF EXISTS buses CASCADE;
@@ -38,18 +27,20 @@ CREATE TYPE attendance_shift AS ENUM ('morning', 'night', 'unknown');
 
 -- ------------------------------------------------------------
 -- Table: buses
+-- - bus_id is a short code (<= 4), derived from master list Route (e.g. Route-A13 -> A13)
+-- - OWN is reserved for "Own Transport" rows (no capacity)
 -- ------------------------------------------------------------
 CREATE TABLE buses (
     bus_id       VARCHAR(10) PRIMARY KEY,
     route        TEXT NOT NULL,
     plate_number VARCHAR(50),
-    capacity     INTEGER DEFAULT 40 CHECK (capacity > 0),
+    capacity     INTEGER DEFAULT 40 CHECK (capacity IS NULL OR capacity > 0),
     CHECK (char_length(bus_id) <= 4)
 );
 
 -- ------------------------------------------------------------
 -- Table: vans
--- A bus can have multiple vans that ferry employees to the bus
+-- - van_code is derived from master list Transport (e.g. B3C)
 -- ------------------------------------------------------------
 CREATE TABLE vans (
     id           SERIAL PRIMARY KEY,
@@ -57,14 +48,16 @@ CREATE TABLE vans (
     bus_id       VARCHAR(10) NOT NULL REFERENCES buses(bus_id) ON DELETE CASCADE,
     plate_number VARCHAR(50),
     driver_name  VARCHAR(100),
-    capacity     INTEGER,
-    active       BOOLEAN DEFAULT TRUE
+    capacity     INTEGER DEFAULT 12 CHECK (capacity IS NULL OR capacity > 0),
+    active       BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE INDEX idx_vans_bus_id ON vans(bus_id);
+CREATE INDEX idx_vans_active_bus_id ON vans(active, bus_id);
 
 -- ------------------------------------------------------------
 -- Table: employees
+-- - batch_id is the scan identifier and equals master list PersonId
 -- ------------------------------------------------------------
 CREATE TABLE employees (
     id        SERIAL PRIMARY KEY,
@@ -72,15 +65,55 @@ CREATE TABLE employees (
     name      VARCHAR(100) NOT NULL,
     bus_id    VARCHAR(10) NOT NULL REFERENCES buses(bus_id) ON DELETE RESTRICT,
     van_id    INTEGER REFERENCES vans(id),
-    active    BOOLEAN DEFAULT TRUE
+    active    BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE INDEX idx_employees_bus_id ON employees(bus_id);
 CREATE INDEX idx_employees_van_id ON employees(van_id);
+CREATE INDEX idx_employees_active_bus_id ON employees(active, bus_id);
+
+-- ------------------------------------------------------------
+-- Table: employee_master
+-- Stores raw master-list fields for audit and reporting.
+-- This table is updated by the master list upload endpoint.
+-- ------------------------------------------------------------
+CREATE TABLE employee_master (
+    id                    BIGSERIAL PRIMARY KEY,
+    personid              BIGINT,
+    row_hash              TEXT,
+    date_joined           DATE,
+    name                  VARCHAR(100),
+    sap_id                VARCHAR(50),
+    status                VARCHAR(30),
+    wdid                  VARCHAR(50),
+    transport_contractor  VARCHAR(100),
+    address1              TEXT,
+    postcode              VARCHAR(20),
+    city                  VARCHAR(100),
+    state                 VARCHAR(100),
+    contact_no            VARCHAR(50),
+    pickup_point          TEXT,
+    transport             VARCHAR(50),
+    route                 VARCHAR(100),
+    building_id           VARCHAR(50),
+    nationality           VARCHAR(50),
+    terminate             DATE,
+    CHECK ((personid IS NULL) OR (personid > 0)),
+    CHECK (
+        (personid IS NOT NULL AND row_hash IS NULL)
+        OR
+        (personid IS NULL AND row_hash IS NOT NULL)
+    )
+);
+
+CREATE UNIQUE INDEX uq_employee_master_personid ON employee_master(personid) WHERE personid IS NOT NULL;
+CREATE INDEX idx_employee_master_transport ON employee_master(transport);
+CREATE INDEX idx_employee_master_route ON employee_master(route);
+CREATE INDEX idx_employee_master_contractor ON employee_master(transport_contractor);
 
 -- ------------------------------------------------------------
 -- Table: attendances
--- One row per scan; shift derived from Kuala Lumpur local time
+-- One row per (person, date, shift), deduplicated by a unique index.
 -- ------------------------------------------------------------
 CREATE TABLE attendances (
     id               BIGSERIAL PRIMARY KEY,
@@ -95,27 +128,20 @@ CREATE TABLE attendances (
     source           VARCHAR(50)
 );
 
-CREATE UNIQUE INDEX uq_attendance_batch_date_shift
-    ON attendances (scanned_batch_id, scanned_on, shift);
-CREATE INDEX idx_attendances_bus_shift_date
-    ON attendances (bus_id, shift, scanned_on);
-CREATE INDEX idx_attendances_scanned_on
-    ON attendances (scanned_on);
+CREATE UNIQUE INDEX uq_attendance_batch_date_shift ON attendances (scanned_batch_id, scanned_on, shift);
+CREATE INDEX idx_attendances_bus_shift_date ON attendances (bus_id, shift, scanned_on);
+CREATE INDEX idx_attendances_scanned_on ON attendances (scanned_on);
 
 -- ------------------------------------------------------------
--- Seed data: initial buses, vans, and employees (safe to re-run)
+-- Minimal seed (optional)
+-- Keeps OWN bus available for "Own Transport" rows and UNKN for missing route rows.
 -- ------------------------------------------------------------
-INSERT INTO buses (bus_id, route, plate_number, capacity) VALUES
-    ('A01', 'Route A (Inbound)', 'WPL 1234', 40),
-    ('B02', 'Route B (Outbound)', 'WKL 5678', 45)
+INSERT INTO buses (bus_id, route, plate_number, capacity)
+VALUES ('OWN', 'Own Transport', NULL, NULL)
 ON CONFLICT (bus_id) DO NOTHING;
 
-INSERT INTO vans (van_code, bus_id, plate_number, driver_name, capacity) VALUES
-    ('VAN_A1', 'A01', 'VAN 1001', 'Ali', 12),
-    ('VAN_B1', 'B02', 'VAN 2001', 'Bala', 12)
-ON CONFLICT (van_code) DO NOTHING;
+INSERT INTO buses (bus_id, route, plate_number, capacity)
+VALUES ('UNKN', 'Unassigned', NULL, NULL)
+ON CONFLICT (bus_id) DO NOTHING;
 
-INSERT INTO employees (batch_id, name, bus_id, van_id) VALUES
-    (1001, 'Employee One', 'A01', (SELECT id FROM vans WHERE van_code='VAN_A1')),
-    (1002, 'Employee Two', 'B02', (SELECT id FROM vans WHERE van_code='VAN_B1'))
-ON CONFLICT (batch_id) DO NOTHING;
+COMMIT;

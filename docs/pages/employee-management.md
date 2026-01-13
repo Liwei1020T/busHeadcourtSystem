@@ -1,35 +1,31 @@
 # Employee Management Page
 
 ## Overview
-The Employee Management page is designed for managing the database of employees who use the bus service. It links employees to specific buses or vans and tracks their active status.
+The Employee Directory page is designed for auditing the employee master list data and checking transport assignments. The master list upload is the source of truth for employee records and transport routing.
 
 ## Key Features
 
 ### 1. Employee List
 - Displays a comprehensive list of employees.
-- **Search**: Filter by Name or Batch ID.
+- **Search**: Filter by Name, PersonId, contractor, pickup point, route, or transport code.
 - **Filters**:
     - **Bus**: Filter employees assigned to a specific bus.
+    - **Contractor**: Filter employees by transport contractor.
     - **Status**: Filter by Active, Inactive, or All.
 
-### 2. Employee Form
-Provides a form to add or update employee details:
-- **Batch ID**: Unique employee identifier (Required).
-- **Name**: Full name of the employee.
-- **Bus Assignment**: Dropdown to assign the employee to a specific bus.
-- **Van Assignment**: Dropdown to assign the employee to a specific van (filtered by the selected bus).
-- **Active Status**: Toggle to mark the employee as active or inactive.
+### 2. Employee Details
+- Opens a details dialog showing fields from the master list (address, contact, contractor, pickup point, and employment info).
 
 ### 3. Statistics
 - Displays the count of currently active employees.
 
 ## Usage
-1.  **Search/Filter**: Use the search bar or dropdowns to find specific employees.
-2.  **Edit**: Select an employee from the list to edit their details.
-3.  **Assign Transport**: Use the Bus and Van dropdowns to update transport assignments.
-4.  **Deactivate**: Uncheck the "Active" toggle for employees no longer using the service.
+1. **Upload master list**: Use the Uploads page to upload the employee master list.
+2. **Search/filter**: Use the search bar and dropdowns to locate employees and groups.
+3. **Details**: Click "Details" on a row to view master list fields.
+4. **Eligibility**: Use "Activate/Deactivate" to toggle whether an employee is eligible for attendance counting.
 
 ## Technical Details
-- **File**: `src/pages/EmployeeManagement.tsx`
-- **Data Source**: `fetchEmployees`, `fetchBuses`, `fetchVans`, `saveEmployee` APIs.
-- **Logic**: Van dropdown options are dynamically filtered based on the selected Bus.
+- **File**: `web-dashboard/src/pages/EmployeeManagement.tsx`
+- **Data Source**: `fetchEmployees`, `fetchBuses`, `saveEmployee` APIs.
+- **Backend Enrichment**: `GET /api/bus/employees` joins `employees` with `employee_master` when available.
