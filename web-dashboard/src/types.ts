@@ -32,8 +32,8 @@ export type FilterParams = {
   date_from: string;
   date_to: string;
   shift: string;
-  bus_id: string;
-  route: string;
+  bus_id: string[];
+  plant: string;
 };
 
 export type BusInfo = {
@@ -136,6 +136,7 @@ export type AttendanceUploadResponse = {
 export type OccupancyBusRow = {
   bus_id: string;
   route?: string | null;
+  plant?: string | null;
   bus_capacity: number;
   van_count: number;
   van_capacity: number;

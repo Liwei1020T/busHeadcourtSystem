@@ -21,6 +21,7 @@ const SHIFTS = [
   { value: 'morning', label: 'Morning' },
   { value: 'night', label: 'Night' },
 ];
+const PLANTS = ['P1', 'P2', 'BK', 'Mixed', 'Unassigned'];
 
 export default function FiltersBar({
   filters,
@@ -32,13 +33,24 @@ export default function FiltersBar({
   availableBuses,
 }: FiltersBarProps) {
   const shiftValue = filters.shift || 'all';
-  const busValue = filters.bus_id || 'all';
+  const busValue = filters.bus_id.length ? filters.bus_id[filters.bus_id.length - 1] : 'all';
+  const plantValue = filters.plant || 'all';
 
   const handleChange = (field: keyof FilterParams, value: string) => {
     onFiltersChange({
       ...filters,
       [field]: value,
     });
+  };
+
+  const handleBusToggle = (value: string) => {
+    if (value === 'all') {
+      onFiltersChange({ ...filters, bus_id: [] });
+      return;
+    }
+    const exists = filters.bus_id.includes(value);
+    const next = exists ? filters.bus_id.filter((bus) => bus !== value) : [...filters.bus_id, value];
+    onFiltersChange({ ...filters, bus_id: next });
   };
 
   const handleQuickDate = (days: number | 'month' | 'today') => {
@@ -55,7 +67,7 @@ export default function FiltersBar({
       dateFrom = format(startOfMonth(today), 'yyyy-MM-dd');
       dateTo = todayStr;
     } else {
-      dateFrom = format(addDays(today, -days), 'yyyy-MM-dd');
+      dateFrom = format(addDays(today, -(days - 1)), 'yyyy-MM-dd');
       dateTo = todayStr;
     }
 
@@ -66,7 +78,7 @@ export default function FiltersBar({
     });
   };
 
-  const hasActiveFilters = Boolean(filters.shift || filters.bus_id || filters.route);
+  const hasActiveFilters = Boolean(filters.shift || filters.bus_id.length || filters.plant);
 
   return (
     <Card className="mb-6 overflow-hidden">
@@ -118,11 +130,13 @@ export default function FiltersBar({
                 {filters.shift && (
                   <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">{filters.shift}</Badge>
                 )}
-                {filters.bus_id && (
-                  <Badge className="bg-teal-100 text-teal-700 border-0 text-xs">{filters.bus_id}</Badge>
+                {filters.bus_id.length > 0 && (
+                  <Badge className="bg-teal-100 text-teal-700 border-0 text-xs">
+                    {filters.bus_id.length} buses
+                  </Badge>
                 )}
-                {filters.route && (
-                  <Badge className="bg-cyan-100 text-cyan-700 border-0 text-xs">{filters.route}</Badge>
+                {filters.plant && (
+                  <Badge className="bg-cyan-100 text-cyan-700 border-0 text-xs">{filters.plant}</Badge>
                 )}
               </div>
             )}
@@ -180,9 +194,9 @@ export default function FiltersBar({
 
           <div className="w-full">
             <label className="block text-sm font-medium text-gray-700 mb-1">Bus ID</label>
-            <Select value={busValue} onValueChange={(value) => handleChange('bus_id', value === 'all' ? '' : value)}>
+            <Select value={busValue} onValueChange={handleBusToggle}>
               <SelectTrigger className="bg-white border-gray-300">
-                <SelectValue placeholder="All Buses" />
+                <SelectValue placeholder={filters.bus_id.length ? `${filters.bus_id.length} selected` : 'All Buses'} />
               </SelectTrigger>
               <SelectContent className="bg-white border-gray-200">
                 <SelectItem value="all" className="focus:bg-emerald-50">
@@ -198,12 +212,22 @@ export default function FiltersBar({
           </div>
 
           <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Route</label>
-            <Input
-              value={filters.route}
-              onChange={(e) => handleChange('route', e.target.value)}
-              placeholder="e.g. Route-A03 or A03"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Plant</label>
+            <Select value={plantValue} onValueChange={(value) => handleChange('plant', value === 'all' ? '' : value)}>
+              <SelectTrigger className="bg-white border-gray-300">
+                <SelectValue placeholder="All Plants" />
+              </SelectTrigger>
+              <SelectContent className="bg-white border-gray-200">
+                <SelectItem value="all" className="focus:bg-emerald-50">
+                  All Plants
+                </SelectItem>
+                {PLANTS.map((plant) => (
+                  <SelectItem key={plant} value={plant} className="focus:bg-emerald-50">
+                    {plant}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -224,4 +248,3 @@ export default function FiltersBar({
     </Card>
   );
 }
-

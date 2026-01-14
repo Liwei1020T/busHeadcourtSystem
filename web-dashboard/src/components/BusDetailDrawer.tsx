@@ -31,7 +31,9 @@ export default function BusDetailDrawer({ busId, filters, onClose }: BusDetailDr
       setError(null);
       try {
         const query = {
-          ...filters,
+          date_from: filters.date_from,
+          date_to: filters.date_to,
+          shift: filters.shift,
           bus_id: busId,
           include_inactive: includeInactive,
         };

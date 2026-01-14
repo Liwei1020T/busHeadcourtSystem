@@ -52,8 +52,9 @@ export async function fetchHeadcount(params: Partial<FilterParams>): Promise<Hea
   if (params.date_from) searchParams.append('date_from', params.date_from);
   if (params.date_to) searchParams.append('date_to', params.date_to);
   if (params.shift) searchParams.append('shift', params.shift);
-  if (params.bus_id) searchParams.append('bus_id', params.bus_id);
-  if (params.route) searchParams.append('route', params.route);
+  if (params.bus_id && params.bus_id.length > 0) {
+    searchParams.append('bus_id', params.bus_id.join(','));
+  }
   
   const url = `${API_BASE}/report/headcount?${searchParams.toString()}`;
   
@@ -94,8 +95,9 @@ export async function exportHeadcountCsv(params: Partial<FilterParams>): Promise
   if (params.date_from) searchParams.append('date_from', params.date_from);
   if (params.date_to) searchParams.append('date_to', params.date_to);
   if (params.shift) searchParams.append('shift', params.shift);
-  if (params.bus_id) searchParams.append('bus_id', params.bus_id);
-  if (params.route) searchParams.append('route', params.route);
+  if (params.bus_id && params.bus_id.length > 0) {
+    searchParams.append('bus_id', params.bus_id.join(','));
+  }
 
   const url = `${API_BASE}/report/headcount/export?${searchParams.toString()}`;
   await downloadCsv(url, 'headcount.csv');
@@ -250,8 +252,10 @@ export async function fetchOccupancy(params: Partial<FilterParams>): Promise<Occ
   if (params.date_from) searchParams.append('date_from', params.date_from);
   if (params.date_to) searchParams.append('date_to', params.date_to);
   if (params.shift) searchParams.append('shift', params.shift);
-  if (params.bus_id) searchParams.append('bus_id', params.bus_id);
-  if (params.route) searchParams.append('route', params.route);
+  if (params.bus_id && params.bus_id.length > 0) {
+    searchParams.append('bus_id', params.bus_id.join(','));
+  }
+  if (params.plant) searchParams.append('plant', params.plant);
 
   const url = `${API_BASE}/report/occupancy?${searchParams.toString()}`;
   const response = await fetch(url);
@@ -263,9 +267,15 @@ export async function fetchOccupancy(params: Partial<FilterParams>): Promise<Occ
   return response.json();
 }
 
-export async function fetchBusDetail(
-  params: Partial<FilterParams> & { bus_id: string; include_inactive?: boolean },
-): Promise<BusDetailResponse> {
+export type BusDetailParams = {
+  bus_id: string;
+  include_inactive?: boolean;
+  date_from?: string;
+  date_to?: string;
+  shift?: string;
+};
+
+export async function fetchBusDetail(params: BusDetailParams): Promise<BusDetailResponse> {
   const searchParams = new URLSearchParams();
   if (params.date_from) searchParams.append('date_from', params.date_from);
   if (params.date_to) searchParams.append('date_to', params.date_to);
