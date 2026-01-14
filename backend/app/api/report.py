@@ -50,6 +50,29 @@ def normalize_day_type(value: str | None) -> str:
     return "regular"
 
 
+def parse_bus_id_filter(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def bus_capacity_for(bus_id: str | None) -> int:
+    if not bus_id:
+        return 0
+    if bus_id in {"OWN", "UNKN"}:
+        return 0
+    return 42
+
+
+def derive_bus_plant(plants: list[str]) -> str:
+    unique = sorted({p for p in plants if p})
+    if not unique:
+        return "Unassigned"
+    if len(unique) > 1:
+        return "Mixed"
+    return unique[0]
+
+
 def parse_date(value: Optional[str]) -> Optional[date_type]:
     if value is None:
         return None
