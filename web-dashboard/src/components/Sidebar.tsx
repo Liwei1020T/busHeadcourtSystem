@@ -1,6 +1,6 @@
 // web-dashboard/src/components/Sidebar.tsx
 
-import { TrendingUp, Users, AlertTriangle, Filter } from 'lucide-react';
+import { TrendingUp, Users, Filter } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -120,7 +120,7 @@ export default function Sidebar({
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox
               checked={showOverloaded}
-              onCheckedChange={(c) => onFilterChange('overloaded', !!c)}
+              onCheckedChange={(c: boolean | 'indeterminate') => onFilterChange('overloaded', !!c)}
               className="border-slate-600 data-[state=checked]:bg-cyan-500"
             />
             <span className="text-sm text-slate-300">Overloaded (&gt;100%)</span>
@@ -128,7 +128,7 @@ export default function Sidebar({
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox
               checked={showUnderutilized}
-              onCheckedChange={(c) => onFilterChange('underutilized', !!c)}
+              onCheckedChange={(c: boolean | 'indeterminate') => onFilterChange('underutilized', !!c)}
               className="border-slate-600 data-[state=checked]:bg-cyan-500"
             />
             <span className="text-sm text-slate-300">Underutilized (&lt;30%)</span>
@@ -136,7 +136,7 @@ export default function Sidebar({
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox
               checked={showHighAbsent}
-              onCheckedChange={(c) => onFilterChange('highAbsent', !!c)}
+              onCheckedChange={(c: boolean | 'indeterminate') => onFilterChange('highAbsent', !!c)}
               className="border-slate-600 data-[state=checked]:bg-cyan-500"
             />
             <span className="text-sm text-slate-300">High Absent (&gt;20%)</span>

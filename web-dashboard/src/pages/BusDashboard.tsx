@@ -13,9 +13,9 @@ import AnalyticsDashboard from '../components/AnalyticsDashboard';
 import BusDetailDrawer from '../components/BusDetailDrawer';
 import { DashboardMode } from '../components/ModeToggle';
 
-import { fetchBuses, fetchOccupancy } from '../api';
-import { BusInfo, OccupancyResponse, FilterParams, OccupancyBusRow } from '../types';
-import { groupByZone, ZoneGroup } from '../utils/zones';
+import { fetchOccupancy } from '../api';
+import { OccupancyResponse, FilterParams, OccupancyBusRow } from '../types';
+import { groupByZone } from '../utils/zones';
 import { getSeverityLevel, SeverityLevel } from '../lib/theme';
 
 function getTodayString(): string {
@@ -39,7 +39,6 @@ export default function BusDashboard() {
   // Data
   const [loading, setLoading] = useState(false);
   const [occupancy, setOccupancy] = useState<OccupancyResponse | null>(null);
-  const [availableBuses, setAvailableBuses] = useState<BusInfo[]>([]);
   const [selectedBus, setSelectedBus] = useState<OccupancyBusRow | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -57,9 +56,6 @@ export default function BusDashboard() {
 
   // Initial load
   useEffect(() => {
-    fetchBuses()
-      .then((buses) => setAvailableBuses(buses.sort((a, b) => a.bus_id.localeCompare(b.bus_id))))
-      .catch(console.error);
     handleSearch();
   }, []);
 

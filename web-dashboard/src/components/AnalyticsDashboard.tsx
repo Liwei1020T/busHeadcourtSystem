@@ -50,7 +50,7 @@ function StatCard({
   );
 }
 
-export default function AnalyticsDashboard({ zones, totalPresent, totalRoster, totalCapacity }: AnalyticsDashboardProps) {
+export default function AnalyticsDashboard({ zones, totalPresent, totalCapacity }: AnalyticsDashboardProps) {
   // Calculate metrics
   const avgUtilization = totalCapacity > 0 ? (totalPresent / totalCapacity) * 100 : 0;
   const underutilizedBuses = zones.reduce((acc, z) =>

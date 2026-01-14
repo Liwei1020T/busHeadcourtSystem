@@ -62,7 +62,7 @@ export default function RouteComparisonChart({ data }: RouteComparisonChartProps
               fontSize: '12px',
             }}
             labelStyle={{ color: '#94a3b8' }}
-            formatter={(value: number, name: string, props: any) => [
+            formatter={(value: number, _name: string, props: any) => [
               `${value.toFixed(1)}% (${props.payload.busCount} buses)`,
               'Utilization',
             ]}
