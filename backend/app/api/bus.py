@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import and_
 
+from app.api.report import normalize_day_type
 from app.core.db import get_db
 from app.core.excel import build_scanned_at, coerce_date, coerce_int, coerce_str, coerce_time, read_table_from_best_sheet
 from app.core.security import validate_api_key
@@ -350,6 +351,9 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
         route_value = coerce_str(_row_value(row.values, "route"))
         building_id = coerce_str(_row_value(row.values, "buildingid"))
         nationality = coerce_str(_row_value(row.values, "nationality"))
+        day_type = normalize_day_type(
+            coerce_str(_row_value(row.values, "daytype", "day_type", "day type"))
+        )
 
         bus_id = _canonical_bus_id(route_value or "") if route_value else None
         if not bus_id and transport and "own" in transport.lower():
@@ -408,6 +412,7 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
             "building_id": building_id,
             "nationality": nationality,
             "terminate_date": terminate_date,
+            "day_type": day_type,
         }
 
         if personid:
@@ -566,6 +571,8 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
             master.route = item["route_value"]
         if item["building_id"] is not None:
             master.building_id = item["building_id"]
+        if item["day_type"] is not None:
+            master.day_type = item["day_type"]
         if item["nationality"] is not None:
             master.nationality = item["nationality"]
         if item["terminate_date"] is not None:
@@ -590,6 +597,7 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
         master.transport = item.get("transport")
         master.route = item.get("route_value")
         master.building_id = item.get("building_id")
+        master.day_type = item.get("day_type")
         master.nationality = item.get("nationality")
         master.terminate = item.get("terminate_date")
         db.add(master)

@@ -29,6 +29,7 @@ class EmployeeMaster(Base):
     transport = Column(String(50), nullable=True)
     route = Column(String(100), nullable=True)
     building_id = Column(String(50), nullable=True)
+    day_type = Column(String(20), nullable=True)
     nationality = Column(String(50), nullable=True)
     terminate = Column(Date, nullable=True)
 

@@ -41,6 +41,15 @@ def parse_bus_ids(bus_id: Optional[str]) -> list[str]:
     return [p for p in parts if p]
 
 
+def normalize_day_type(value: str | None) -> str:
+    if not value:
+        return "regular"
+    text = str(value).strip().lower()
+    if text in {"offday", "restday", "regular"}:
+        return text
+    return "regular"
+
+
 def parse_date(value: Optional[str]) -> Optional[date_type]:
     if value is None:
         return None

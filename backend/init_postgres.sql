@@ -96,6 +96,7 @@ CREATE TABLE employee_master (
     transport             VARCHAR(50),
     route                 VARCHAR(100),
     building_id           VARCHAR(50),
+    day_type              VARCHAR(20),
     nationality           VARCHAR(50),
     terminate             DATE,
     CHECK ((personid IS NULL) OR (personid > 0)),
