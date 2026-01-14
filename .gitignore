@@ -51,3 +51,4 @@ db_output.txt
 docs/**/*.xlsx
 docs/**/*.xls
 docs/**/*.csv
+.worktrees
