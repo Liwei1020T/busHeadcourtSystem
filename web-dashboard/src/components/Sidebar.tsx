@@ -38,7 +38,7 @@ export default function Sidebar({
   const utilPct = Math.min(utilization, 100);
 
   return (
-    <aside className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+    <aside className="hidden lg:flex w-64 bg-slate-800 border-r border-slate-700 flex-col">
       {/* Header */}
       <div className="p-4 border-b border-slate-700">
         <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
