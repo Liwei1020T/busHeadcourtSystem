@@ -64,6 +64,19 @@ def bus_capacity_for(bus_id: str | None) -> int:
     return 42
 
 
+def normalize_plant(value: str | None) -> Optional[str]:
+    if not value:
+        return None
+    text = str(value).strip().upper()
+    if text.startswith("P1"):
+        return "P1"
+    if text.startswith("P2"):
+        return "P2"
+    if text.startswith("BK"):
+        return "BK"
+    return None
+
+
 def derive_bus_plant(plants: list[str]) -> str:
     unique = sorted({p for p in plants if p})
     if not unique:
@@ -329,6 +342,7 @@ def occupancy(
     shift: Optional[str] = Query(None, description="Filter by shift (morning/night/unknown)"),
     bus_id: Optional[str] = Query(None, description="Filter by bus ID (comma-separated supported)"),
     route: Optional[str] = Query(None, description="Filter by route (substring match)"),
+    plant: Optional[str] = Query(None, description="Filter by plant (P1/P2/BK/Mixed/Unassigned)"),
     db: Session = Depends(get_db),
 ):
     """
@@ -338,15 +352,16 @@ def occupancy(
     target_from = parse_date(date_from)
     target_to = parse_date(date_to)
     target_shift = validate_shift(shift)
-    bus_ids = parse_bus_ids(bus_id)
+    bus_ids = parse_bus_id_filter(bus_id)
+    plant_filter = plant.strip().upper() if plant else None
 
-    bus_rows_query = db.query(Bus.bus_id, Bus.route, func.coalesce(Bus.capacity, 0))
+    bus_rows_query = db.query(Bus.bus_id, Bus.route)
     if bus_ids:
         bus_rows_query = bus_rows_query.filter(Bus.bus_id.in_(bus_ids))
     elif route:
         bus_rows_query = bus_rows_query.filter(or_(Bus.route.ilike(f"%{route}%"), Bus.bus_id.ilike(f"%{route}%")))
     bus_rows = bus_rows_query.all()
-    bus_meta = {r[0]: {"route": r[1], "bus_capacity": int(r[2] or 0)} for r in bus_rows}
+    bus_meta = {r[0]: {"route": r[1], "bus_capacity": bus_capacity_for(r[0])} for r in bus_rows}
     allowed_bus_ids = set(bus_meta.keys()) if route and not bus_ids else None
 
     van_meta_query = db.query(
@@ -372,6 +387,11 @@ def occupancy(
         func.sum(van_present_case).label("van_present"),
         func.sum(present_case).label("total_present"),
     )
+    attendance_query = attendance_query.join(Employee, Attendance.employee_id == Employee.id, isouter=True).join(
+        EmployeeMaster, Employee.batch_id == EmployeeMaster.personid, isouter=True
+    )
+    regular_day_type = or_(EmployeeMaster.day_type.is_(None), EmployeeMaster.day_type == "regular")
+    attendance_query = attendance_query.filter(regular_day_type)
 
     if target_date:
         attendance_query = attendance_query.filter(Attendance.scanned_on == target_date)
@@ -399,29 +419,30 @@ def occupancy(
         if r[0]
     }
 
-    roster_query = db.query(
-        Employee.bus_id,
-        func.sum(case((Employee.van_id.is_(None), 1), else_=0)).label("bus_roster"),
-        func.sum(case((Employee.van_id.is_not(None), 1), else_=0)).label("van_roster"),
-        func.count(Employee.id).label("total_roster"),
-    ).filter(Employee.active.is_(True))
-
+    roster_query = db.query(Employee.bus_id, Employee.van_id, EmployeeMaster.building_id).join(
+        EmployeeMaster, Employee.batch_id == EmployeeMaster.personid, isouter=True
+    )
+    roster_query = roster_query.filter(Employee.active.is_(True)).filter(regular_day_type)
     if bus_ids:
         roster_query = roster_query.filter(Employee.bus_id.in_(bus_ids))
     elif allowed_bus_ids is not None:
         roster_query = roster_query.filter(Employee.bus_id.in_(allowed_bus_ids))
 
-    roster_query = roster_query.group_by(Employee.bus_id)
     roster_rows = roster_query.all()
-    roster_by_bus = {
-        r[0]: {
-            "bus_roster": int(r[1] or 0),
-            "van_roster": int(r[2] or 0),
-            "total_roster": int(r[3] or 0),
-        }
-        for r in roster_rows
-        if r[0]
-    }
+    roster_by_bus: dict[str, dict[str, int]] = {}
+    bus_plants: dict[str, set[str]] = {}
+    for bid, van_id, building_id in roster_rows:
+        if not bid:
+            continue
+        entry = roster_by_bus.setdefault(bid, {"bus_roster": 0, "van_roster": 0, "total_roster": 0})
+        if van_id is None:
+            entry["bus_roster"] += 1
+        else:
+            entry["van_roster"] += 1
+        entry["total_roster"] += 1
+        plant_value = normalize_plant(building_id)
+        if plant_value:
+            bus_plants.setdefault(bid, set()).add(plant_value)
 
     all_bus_ids = set(bus_meta.keys()) | set(attendance_by_bus.keys()) | set(roster_by_bus.keys()) | set(van_capacity.keys())
     if bus_ids:
@@ -444,16 +465,20 @@ def occupancy(
     }
 
     for bid in sorted(all_bus_ids):
-        meta = bus_meta.get(bid, {"route": None, "bus_capacity": 0})
+        meta = bus_meta.get(bid, {"route": None, "bus_capacity": bus_capacity_for(bid)})
         vcount = int(van_count.get(bid, 0))
         vc = int(van_capacity.get(bid, 0))
-        cap = int(meta["bus_capacity"]) + vc
+        cap = int(meta["bus_capacity"])
+        derived_plant = derive_bus_plant(sorted(bus_plants.get(bid, set())))
+        if plant_filter and derived_plant.upper() != plant_filter:
+            continue
         attendance = attendance_by_bus.get(bid, {"bus_present": 0, "van_present": 0, "total_present": 0})
         roster = roster_by_bus.get(bid, {"bus_roster": 0, "van_roster": 0, "total_roster": 0})
 
         row_obj = OccupancyBusRow(
             bus_id=bid,
             route=meta["route"],
+            plant=derived_plant,
             bus_capacity=int(meta["bus_capacity"]),
             van_count=vcount,
             van_capacity=vc,
@@ -483,7 +508,7 @@ def occupancy(
         total_van_count=totals["van_count"],
         total_bus_capacity=totals["bus_capacity"],
         total_van_capacity=totals["van_capacity"],
-        total_capacity=totals["total_capacity"],
+        total_capacity=totals["bus_capacity"],
         total_bus_present=totals["bus_present"],
         total_van_present=totals["van_present"],
         total_present=totals["total_present"],
@@ -522,6 +547,7 @@ def bus_detail(
 
     bus = db.query(Bus).filter(Bus.bus_id == bus_id).first()
     route = bus.route if bus else None
+    regular_day_type = or_(EmployeeMaster.day_type.is_(None), EmployeeMaster.day_type == "regular")
 
     roster_rows = (
         db.query(
@@ -536,6 +562,7 @@ def bus_detail(
         .join(Van, Employee.van_id == Van.id, isouter=True)
         .join(EmployeeMaster, Employee.batch_id == EmployeeMaster.personid, isouter=True)
         .filter(Employee.bus_id == bus_id)
+        .filter(regular_day_type)
         .order_by(Employee.name)
     )
     if not include_inactive:
@@ -544,6 +571,9 @@ def bus_detail(
 
     present_rows = (
         db.query(Attendance.scanned_batch_id, func.max(Attendance.scanned_at))
+        .join(Employee, Attendance.employee_id == Employee.id, isouter=True)
+        .join(EmployeeMaster, Employee.batch_id == EmployeeMaster.personid, isouter=True)
+        .filter(regular_day_type)
         .filter(Attendance.status == "present")
         .filter(Attendance.bus_id == bus_id)
         .filter(Attendance.scanned_on >= target_from)

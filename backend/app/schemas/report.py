@@ -38,6 +38,7 @@ class AttendanceRecord(BaseModel):
 class OccupancyBusRow(BaseModel):
     bus_id: str
     route: Optional[str] = None
+    plant: Optional[str] = None
     bus_capacity: int
     van_count: int = 0
     van_capacity: int
