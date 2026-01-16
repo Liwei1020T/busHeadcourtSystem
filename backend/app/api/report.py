@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, case, or_
 
 from app.core.db import get_db
+from app.core.cache import ttl_cache
 from app.models import Attendance, AttendanceShift, Bus, Employee, EmployeeMaster, Van
 from app.schemas.report import (
     HeadcountRow,
@@ -41,6 +42,14 @@ def parse_bus_ids(bus_id: Optional[str]) -> list[str]:
     return [p for p in parts if p]
 
 
+def parse_comma_list(value: Optional[str]) -> list[str]:
+    """Parse comma-separated values into a list. Empty entries are ignored."""
+    if not value:
+        return []
+    parts = [p.strip() for p in value.split(",")]
+    return [p for p in parts if p]
+
+
 def parse_date(value: Optional[str]) -> Optional[date_type]:
     if value is None:
         return None
@@ -57,6 +66,20 @@ def validate_shift(value: Optional[str]) -> Optional[AttendanceShift]:
         return AttendanceShift(value)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid shift. Use morning, night, or unknown.")
+
+
+def validate_shifts(value: Optional[str]) -> List[AttendanceShift]:
+    """Parse comma-separated shifts and validate each."""
+    if value is None or value == "":
+        return []
+    parts = parse_comma_list(value)
+    result = []
+    for p in parts:
+        try:
+            result.append(AttendanceShift(p))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid shift '{p}'. Use morning, night, or unknown.")
+    return result
 
 
 def _query_headcount_rows(
@@ -290,33 +313,89 @@ def attendance_export(
 
 
 @router.get("/occupancy", response_model=OccupancyResponse)
+@ttl_cache(ttl_seconds=60)
 def occupancy(
     date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
     date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    shift: Optional[str] = Query(None, description="Filter by shift (morning/night/unknown)"),
+    shift: Optional[str] = Query(None, description="Filter by shift (comma-separated: morning,night)"),
     bus_id: Optional[str] = Query(None, description="Filter by bus ID (comma-separated supported)"),
-    route: Optional[str] = Query(None, description="Filter by route (substring match)"),
+    route: Optional[str] = Query(None, description="Filter by route (comma-separated supported)"),
+    plant: Optional[str] = Query(None, description="Filter by plant/building_id (comma-separated: P1,P2,BK)"),
     db: Session = Depends(get_db),
 ):
     """
     Return per-bus capacity vs actual occupancy, including a bus-vs-van breakdown.
+    Supports multi-select filters for shift, bus_id, route, and plant.
     """
     target_date = parse_date(date)
     target_from = parse_date(date_from)
     target_to = parse_date(date_to)
-    target_shift = validate_shift(shift)
+    target_shifts = validate_shifts(shift)
     bus_ids = parse_bus_ids(bus_id)
+    routes = parse_comma_list(route)
+    plants = parse_comma_list(plant)
 
+    # Query bus metadata
     bus_rows_query = db.query(Bus.bus_id, Bus.route, func.coalesce(Bus.capacity, 0))
     if bus_ids:
         bus_rows_query = bus_rows_query.filter(Bus.bus_id.in_(bus_ids))
-    elif route:
-        bus_rows_query = bus_rows_query.filter(or_(Bus.route.ilike(f"%{route}%"), Bus.bus_id.ilike(f"%{route}%")))
+    if routes:
+        route_filters = [Bus.route.ilike(f"%{r}%") for r in routes]
+        bus_rows_query = bus_rows_query.filter(or_(*route_filters))
     bus_rows = bus_rows_query.all()
     bus_meta = {r[0]: {"route": r[1], "bus_capacity": int(r[2] or 0)} for r in bus_rows}
-    allowed_bus_ids = set(bus_meta.keys()) if route and not bus_ids else None
+    allowed_bus_ids = set(bus_meta.keys()) if (routes and not bus_ids) else None
 
+    # Query building_id for each bus from employee_master (most common building_id)
+    building_query = (
+        db.query(
+            Employee.bus_id,
+            EmployeeMaster.building_id,
+            func.count(Employee.id).label("cnt")
+        )
+        .join(EmployeeMaster, Employee.batch_id == EmployeeMaster.personid, isouter=True)
+        .filter(Employee.active.is_(True))
+        .group_by(Employee.bus_id, EmployeeMaster.building_id)
+    )
+    if bus_ids:
+        building_query = building_query.filter(Employee.bus_id.in_(bus_ids))
+    elif allowed_bus_ids is not None:
+        building_query = building_query.filter(Employee.bus_id.in_(allowed_bus_ids))
+
+    building_rows = building_query.all()
+    # Get the most common building_id for each bus
+    bus_building_counts: dict = {}
+    for bid, bld_id, cnt in building_rows:
+        if bid not in bus_building_counts:
+            bus_building_counts[bid] = {}
+        if bld_id:
+            bus_building_counts[bid][bld_id] = bus_building_counts[bid].get(bld_id, 0) + cnt
+
+    building_by_bus = {}
+    for bid, counts in bus_building_counts.items():
+        if counts:
+            building_by_bus[bid] = max(counts.keys(), key=lambda k: counts[k])
+        else:
+            building_by_bus[bid] = None
+
+    # Filter by plant if specified
+    if plants:
+        plants_upper = [p.upper() for p in plants]
+        filtered_bus_ids = set()
+        for bid, bld in building_by_bus.items():
+            if bld and bld.upper() in plants_upper:
+                filtered_bus_ids.add(bid)
+            elif not bld and "UNKNOWN" in plants_upper:
+                filtered_bus_ids.add(bid)
+        if allowed_bus_ids is not None:
+            allowed_bus_ids = allowed_bus_ids & filtered_bus_ids
+        elif bus_ids:
+            bus_ids = [b for b in bus_ids if b in filtered_bus_ids]
+        else:
+            allowed_bus_ids = filtered_bus_ids
+
+    # Query van metadata
     van_meta_query = db.query(
         Van.bus_id,
         func.count(Van.id).label("van_count"),
@@ -334,6 +413,13 @@ def occupancy(
     bus_present_case = case((Attendance.status == "present", case((Attendance.van_id.is_(None), 1), else_=0)), else_=0)
     van_present_case = case((Attendance.status == "present", case((Attendance.van_id.is_not(None), 1), else_=0)), else_=0)
 
+    # Calculate number of days in range for averaging
+    num_days = 1
+    if target_date:
+        num_days = 1
+    elif target_from and target_to:
+        num_days = max(1, (target_to - target_from).days + 1)
+
     attendance_query = db.query(
         Attendance.bus_id,
         func.sum(bus_present_case).label("bus_present"),
@@ -348,8 +434,8 @@ def occupancy(
             attendance_query = attendance_query.filter(Attendance.scanned_on >= target_from)
         if target_to:
             attendance_query = attendance_query.filter(Attendance.scanned_on <= target_to)
-    if target_shift:
-        attendance_query = attendance_query.filter(Attendance.shift == target_shift)
+    if target_shifts:
+        attendance_query = attendance_query.filter(Attendance.shift.in_(target_shifts))
     if bus_ids:
         attendance_query = attendance_query.filter(Attendance.bus_id.in_(bus_ids))
     elif allowed_bus_ids is not None:
@@ -357,11 +443,16 @@ def occupancy(
 
     attendance_query = attendance_query.group_by(Attendance.bus_id)
     attendance_rows = attendance_query.all()
+
+    # Calculate daily averages when spanning multiple days
     attendance_by_bus = {
         r[0] or "": {
-            "bus_present": int(r[1] or 0),
-            "van_present": int(r[2] or 0),
-            "total_present": int(r[3] or 0),
+            "bus_present": round(int(r[1] or 0) / num_days),
+            "van_present": round(int(r[2] or 0) / num_days),
+            "total_present": round(int(r[3] or 0) / num_days),
+            "bus_present_sum": int(r[1] or 0),
+            "van_present_sum": int(r[2] or 0),
+            "total_present_sum": int(r[3] or 0),
         }
         for r in attendance_rows
         if r[0]
@@ -406,6 +497,9 @@ def occupancy(
         "bus_present": 0,
         "van_present": 0,
         "total_present": 0,
+        "bus_present_sum": 0,
+        "van_present_sum": 0,
+        "total_present_sum": 0,
         "bus_roster": 0,
         "van_roster": 0,
         "total_roster": 0,
@@ -416,12 +510,16 @@ def occupancy(
         vcount = int(van_count.get(bid, 0))
         vc = int(van_capacity.get(bid, 0))
         cap = int(meta["bus_capacity"]) + vc
-        attendance = attendance_by_bus.get(bid, {"bus_present": 0, "van_present": 0, "total_present": 0})
+        attendance = attendance_by_bus.get(bid, {
+            "bus_present": 0, "van_present": 0, "total_present": 0,
+            "bus_present_sum": 0, "van_present_sum": 0, "total_present_sum": 0
+        })
         roster = roster_by_bus.get(bid, {"bus_roster": 0, "van_roster": 0, "total_roster": 0})
 
         row_obj = OccupancyBusRow(
             bus_id=bid,
             route=meta["route"],
+            building_id=building_by_bus.get(bid),
             bus_capacity=int(meta["bus_capacity"]),
             van_count=vcount,
             van_capacity=vc,
@@ -429,6 +527,12 @@ def occupancy(
             bus_present=int(attendance["bus_present"]),
             van_present=int(attendance["van_present"]),
             total_present=int(attendance["total_present"]),
+            # New fields
+            num_days=num_days,
+            bus_present_sum=int(attendance["bus_present_sum"]),
+            van_present_sum=int(attendance["van_present_sum"]),
+            total_present_sum=int(attendance["total_present_sum"]),
+            # Roster
             bus_roster=int(roster["bus_roster"]),
             van_roster=int(roster["van_roster"]),
             total_roster=int(roster["total_roster"]),
@@ -442,12 +546,16 @@ def occupancy(
         totals["bus_present"] += row_obj.bus_present
         totals["van_present"] += row_obj.van_present
         totals["total_present"] += row_obj.total_present
+        totals["bus_present_sum"] += row_obj.bus_present_sum
+        totals["van_present_sum"] += row_obj.van_present_sum
+        totals["total_present_sum"] += row_obj.total_present_sum
         totals["bus_roster"] += row_obj.bus_roster
         totals["van_roster"] += row_obj.van_roster
         totals["total_roster"] += row_obj.total_roster
 
     return OccupancyResponse(
         rows=rows,
+        num_days=num_days,
         total_van_count=totals["van_count"],
         total_bus_capacity=totals["bus_capacity"],
         total_van_capacity=totals["van_capacity"],
@@ -455,6 +563,9 @@ def occupancy(
         total_bus_present=totals["bus_present"],
         total_van_present=totals["van_present"],
         total_present=totals["total_present"],
+        total_bus_present_sum=totals["bus_present_sum"],
+        total_van_present_sum=totals["van_present_sum"],
+        total_present_sum=totals["total_present_sum"],
         total_bus_roster=totals["bus_roster"],
         total_van_roster=totals["van_roster"],
         total_roster=totals["total_roster"],
@@ -659,3 +770,48 @@ def get_summary(
         saving_estimate=0.0,
         trips=trips,
     )
+
+
+@router.get("/occupancy/filters")
+def get_filter_options(db: Session = Depends(get_db)):
+    """
+    Return available filter options for bus_ids, routes, plants, and shifts.
+    Used to populate multi-select dropdowns in the dashboard.
+    """
+    # Get all bus_ids
+    bus_ids = [r[0] for r in db.query(Bus.bus_id).order_by(Bus.bus_id).all() if r[0]]
+
+    # Get all routes
+    routes = [r[0] for r in db.query(Bus.route).distinct().order_by(Bus.route).all() if r[0]]
+
+    # Get all plants (building_ids) from employee_master
+    building_ids = [
+        r[0] for r in db.query(EmployeeMaster.building_id)
+        .distinct()
+        .filter(EmployeeMaster.building_id.isnot(None))
+        .order_by(EmployeeMaster.building_id)
+        .all()
+        if r[0]
+    ]
+    # Normalize to unique plants
+    plants_set = set()
+    for bid in building_ids:
+        upper = bid.upper().strip()
+        if upper in ("P1", "P2"):
+            plants_set.add(upper)
+        elif upper.startswith("BK"):
+            plants_set.add("BK")
+        else:
+            plants_set.add(upper)
+    plants = sorted(list(plants_set))
+
+    # Shifts are fixed
+    shifts = ["morning", "night"]
+
+    return {
+        "buses": bus_ids,
+        "routes": routes,
+        "plants": plants,
+        "shifts": shifts,
+    }
+

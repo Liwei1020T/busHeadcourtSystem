@@ -82,7 +82,7 @@ CREATE TABLE employee_master (
     personid              BIGINT,
     row_hash              TEXT,
     date_joined           DATE,
-    name                  VARCHAR(100),
+    name                  VDARCHAR(100),
     sap_id                VARCHAR(50),
     status                VARCHAR(30),
     wdid                  VARCHAR(50),

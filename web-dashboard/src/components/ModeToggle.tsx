@@ -9,12 +9,12 @@ type ModeToggleProps = {
 
 export default function ModeToggle({ mode, onChange }: ModeToggleProps) {
   return (
-    <div className="flex bg-slate-800 rounded-lg p-1 gap-1">
+    <div className="flex bg-slate-100 rounded-lg p-1 gap-1 border border-slate-200">
       <button
         className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${
           mode === 'live'
-            ? 'bg-cyan-500 text-white shadow-md'
-            : 'text-slate-400 hover:text-white'
+            ? 'bg-white text-emerald-600 shadow-sm border border-slate-200'
+            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/50'
         }`}
         onClick={() => onChange('live')}
       >
@@ -23,8 +23,8 @@ export default function ModeToggle({ mode, onChange }: ModeToggleProps) {
       <button
         className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${
           mode === 'analytics'
-            ? 'bg-cyan-500 text-white shadow-md'
-            : 'text-slate-400 hover:text-white'
+            ? 'bg-white text-emerald-600 shadow-sm border border-slate-200'
+            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/50'
         }`}
         onClick={() => onChange('analytics')}
       >

@@ -31,9 +31,19 @@ export type AttendanceRecord = {
 export type FilterParams = {
   date_from: string;
   date_to: string;
-  shift: string;
-  bus_id: string;
-  route: string;
+  shifts: string[];      // Multi-select shifts
+  bus_ids: string[];     // Multi-select bus IDs
+  routes: string[];      // Multi-select routes
+  plants: string[];      // Multi-select plants (P1, P2, BK)
+};
+
+// Legacy filter params for older API endpoints (headcount, attendance)
+export type LegacyFilterParams = {
+  date_from?: string;
+  date_to?: string;
+  shift?: string;
+  bus_id?: string;
+  route?: string;
 };
 
 export type BusInfo = {
@@ -136,6 +146,7 @@ export type AttendanceUploadResponse = {
 export type OccupancyBusRow = {
   bus_id: string;
   route?: string | null;
+  building_id?: string | null;  // Plant: P1, P2, BK
   bus_capacity: number;
   van_count: number;
   van_capacity: number;
@@ -143,6 +154,11 @@ export type OccupancyBusRow = {
   bus_present: number;
   van_present: number;
   total_present: number;
+  // Raw totals from backend
+  num_days?: number;
+  bus_present_sum?: number;
+  van_present_sum?: number;
+  total_present_sum?: number;
   bus_roster: number;
   van_roster: number;
   total_roster: number;
@@ -150,6 +166,7 @@ export type OccupancyBusRow = {
 
 export type OccupancyResponse = {
   rows: OccupancyBusRow[];
+  num_days?: number;  // Global num_days from backend
   total_van_count: number;
   total_bus_capacity: number;
   total_van_capacity: number;
@@ -157,6 +174,10 @@ export type OccupancyResponse = {
   total_bus_present: number;
   total_van_present: number;
   total_present: number;
+  // Raw totals
+  total_bus_present_sum?: number;
+  total_van_present_sum?: number;
+  total_present_sum?: number;
   total_bus_roster: number;
   total_van_roster: number;
   total_roster: number;
@@ -191,4 +212,11 @@ export type BusDetailResponse = {
   absent_van: number;
   attendance_rate_pct: number;
   employees: BusRosterEntry[];
+};
+
+export type FilterOptions = {
+  buses: string[];
+  routes: string[];
+  plants: string[];
+  shifts: string[];
 };

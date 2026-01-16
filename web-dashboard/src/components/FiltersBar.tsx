@@ -1,4 +1,4 @@
-import { FilterParams } from '../types';
+import { LegacyFilterParams } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,8 @@ import { addDays, startOfMonth, format } from 'date-fns';
 import { X } from 'lucide-react';
 
 type FiltersBarProps = {
-  filters: FilterParams;
-  onFiltersChange: (filters: FilterParams) => void;
+  filters: LegacyFilterParams;
+  onFiltersChange: (filters: LegacyFilterParams) => void;
   onSearch: () => void;
   onToday: () => void;
   onReset: () => void;
@@ -34,7 +34,7 @@ export default function FiltersBar({
   const shiftValue = filters.shift || 'all';
   const busValue = filters.bus_id || 'all';
 
-  const handleChange = (field: keyof FilterParams, value: string) => {
+  const handleChange = (field: keyof LegacyFilterParams, value: string) => {
     onFiltersChange({
       ...filters,
       [field]: value,

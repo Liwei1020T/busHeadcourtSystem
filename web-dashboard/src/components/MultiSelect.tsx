@@ -14,6 +14,7 @@ type MultiSelectProps = {
   onChange: (value: string[]) => void;
   placeholder?: string;
   className?: string;
+  icon?: React.ReactNode;
 };
 
 export default function MultiSelect({
@@ -21,7 +22,8 @@ export default function MultiSelect({
   value = [],
   onChange,
   placeholder = "Select...",
-  className
+  className,
+  icon
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -45,22 +47,23 @@ export default function MultiSelect({
   };
 
   const selectedCount = value.length;
-  
+
   return (
     <div className={cn("relative", className)} ref={containerRef}>
       <Button
         variant="outline"
         role="combobox"
         aria-expanded={open}
-        className="w-full justify-between bg-gray-50/50 h-9 px-3 font-normal"
+        className="w-full justify-between bg-white border-slate-200 h-9 px-3 font-normal shadow-sm hover:bg-slate-50"
         onClick={() => setOpen(!open)}
       >
-        <span className="truncate">
-          {selectedCount === 0 
-            ? <span className="text-gray-500">{placeholder}</span>
+        <span className="truncate flex items-center gap-2">
+          {icon && <span className="opacity-70">{icon}</span>}
+          {selectedCount === 0
+            ? <span className="text-slate-500">{placeholder}</span>
             : selectedCount === options.length
-                ? "All Selected" 
-                : `${selectedCount} selected`
+                ? <span className="text-slate-900 font-medium">All Selected</span>
+                : <span className="text-slate-900 font-medium">{selectedCount} selected</span>
           }
         </span>
         <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />

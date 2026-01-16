@@ -3,12 +3,18 @@ import { X, Search, Download, UserCheck, UserX, AlertCircle, Loader2 } from 'luc
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { BusDetailResponse, FilterParams } from '../types';
+import { BusDetailResponse } from '../types';
 import { fetchBusDetail } from '../api';
+
+type BusDetailFilters = {
+  date_from: string;
+  date_to: string;
+  shift?: string;
+};
 
 type BusDetailDrawerProps = {
   busId: string | null;
-  filters: FilterParams;
+  filters: BusDetailFilters;
   onClose: () => void;
 };
 

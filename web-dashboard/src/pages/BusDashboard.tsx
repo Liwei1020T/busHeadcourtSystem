@@ -1,38 +1,49 @@
 // web-dashboard/src/pages/BusDashboard.tsx
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, differenceInDays, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 
 import DashboardHeader from '../components/DashboardHeader';
 import AlertBanner from '../components/AlertBanner';
 import Sidebar from '../components/Sidebar';
-import ZoneTable from '../components/ZoneTable';
-import AnalyticsDashboard from '../components/AnalyticsDashboard';
+import PlantTable from '../components/PlantTable';
+import PlantAnalyticsDashboard from '../components/PlantAnalyticsDashboard';
 import BusDetailDrawer from '../components/BusDetailDrawer';
 import { DashboardMode } from '../components/ModeToggle';
 
-import { fetchOccupancy } from '../api';
-import { OccupancyResponse, FilterParams, OccupancyBusRow } from '../types';
-import { groupByZone } from '../utils/zones';
+import { fetchOccupancy, fetchFilterOptions } from '../api';
+import { OccupancyResponse, FilterParams, FilterOptions, OccupancyBusRow } from '../types';
+import { groupByPlant, extractPlant } from '../utils/plants';
 import { getSeverityLevel, SeverityLevel } from '../lib/theme';
 
 function getTodayString(): string {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
+const DEFAULT_FILTER_OPTIONS: FilterOptions = {
+  buses: [],
+  routes: [],
+  plants: [],
+  shifts: ['morning', 'night'],
+};
+
 export default function BusDashboard() {
   // Mode
   const [mode, setMode] = useState<DashboardMode>('live');
 
-  // Filters
+  // Filter options (for dropdowns)
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>(DEFAULT_FILTER_OPTIONS);
+
+  // Filters (multi-select)
   const [filters, setFilters] = useState<FilterParams>({
     date_from: getTodayString(),
     date_to: getTodayString(),
-    shift: '',
-    bus_id: '',
-    route: '',
+    shifts: [],
+    bus_ids: [],
+    routes: [],
+    plants: [],
   });
   const [activeFilters, setActiveFilters] = useState<FilterParams>(filters);
 
@@ -51,12 +62,19 @@ export default function BusDashboard() {
     overloaded: false,
     underutilized: false,
     highAbsent: false,
-    zone: '',
+    plant: '',
   });
 
-  // Initial load
+  // Search query
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Load filter options on mount
   useEffect(() => {
-    handleSearch();
+    fetchFilterOptions()
+      .then(setFilterOptions)
+      .catch((err) => {
+        console.error('Failed to load filter options:', err);
+      });
   }, []);
 
   const handleSearch = useCallback(async () => {
@@ -75,13 +93,18 @@ export default function BusDashboard() {
     }
   }, [filters]);
 
-  // Calculate severity counts
+  // Initial load
+  useEffect(() => {
+    handleSearch();
+  }, [handleSearch]);
+
+  // Calculate severity counts (based on bus_capacity only)
   const severityCounts = useMemo(() => {
     if (!occupancy) return { critical: 0, warning: 0, normal: 0 };
 
     let critical = 0, warning = 0, normal = 0;
     occupancy.rows.forEach((row) => {
-      const util = row.total_capacity > 0 ? (row.total_present / row.total_capacity) * 100 : 0;
+      const util = row.bus_capacity > 0 ? (row.bus_present / row.bus_capacity) * 100 : 0;
       const level = getSeverityLevel(util);
       if (level === 'critical') critical++;
       else if (level === 'warning') warning++;
@@ -95,12 +118,27 @@ export default function BusDashboard() {
     if (!occupancy) return [];
 
     return occupancy.rows.filter((row) => {
-      // Hide OWN/UNKN
-      if (row.route?.toUpperCase().includes('OWN') || row.bus_id.toUpperCase().includes('OWN')) {
+      // Hide OWN/UNKN (own transport and unknown)
+      const busIdUpper = row.bus_id.toUpperCase();
+      const routeUpper = row.route?.toUpperCase() || '';
+      if (
+        busIdUpper === 'OWN' ||
+        busIdUpper === 'UNKN' ||
+        busIdUpper.includes('OWN') ||
+        routeUpper.includes('OWN')
+      ) {
         return false;
       }
 
-      const util = row.total_capacity > 0 ? (row.total_present / row.total_capacity) * 100 : 0;
+      // Search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesBus = row.bus_id.toLowerCase().includes(query);
+        const matchesRoute = (row.route || '').toLowerCase().includes(query);
+        if (!matchesBus && !matchesRoute) return false;
+      }
+
+      const util = row.bus_capacity > 0 ? (row.bus_present / row.bus_capacity) * 100 : 0;
       const absentPct = row.total_roster > 0 ? ((row.total_roster - row.total_present) / row.total_roster) * 100 : 0;
       const severity = getSeverityLevel(util);
 
@@ -114,49 +152,67 @@ export default function BusDashboard() {
 
       return true;
     });
-  }, [occupancy, severityFilter, quickFilters]);
+  }, [occupancy, severityFilter, quickFilters, searchQuery]);
 
-  const zones = useMemo(() => {
+  const plants = useMemo(() => {
     let rows = filteredRows;
 
-    // Zone filter
-    if (quickFilters.zone) {
+    // Plant filter from sidebar
+    if (quickFilters.plant) {
       rows = rows.filter((row) => {
-        const zone = row.bus_id.match(/^([A-Z]+)/i)?.[1]?.toUpperCase() || '';
-        if (zone.startsWith('BK')) return quickFilters.zone === 'BK';
-        return zone === quickFilters.zone;
+        const plantId = extractPlant(row.building_id, row.route);
+        return plantId === quickFilters.plant;
       });
     }
 
-    return groupByZone(rows);
-  }, [filteredRows, quickFilters.zone]);
+    return groupByPlant(rows);
+  }, [filteredRows, quickFilters.plant]);
 
-  // Extract unique zones for filter dropdown
-  const allZones = useMemo(() => {
+  // Extract unique plants for filter dropdown
+  const allPlants = useMemo(() => {
     if (!occupancy) return [];
-    const zoneSet = new Set<string>();
+    const plantSet = new Set<string>();
     occupancy.rows.forEach((row) => {
-      const match = row.bus_id.match(/^([A-Z]+)/i);
-      if (match) {
-        const prefix = match[1].toUpperCase();
-        zoneSet.add(prefix.startsWith('BK') ? 'BK' : prefix);
+      const plant = extractPlant(row.building_id, row.route);
+      if (plant !== 'Unknown') {
+        plantSet.add(plant);
       }
     });
-    return Array.from(zoneSet).sort();
+    return Array.from(plantSet).sort();
   }, [occupancy]);
 
   const handleQuickFilterChange = (filter: string, value: boolean | string) => {
     setQuickFilters((prev) => ({ ...prev, [filter]: value }));
   };
 
-  // Totals
-  const totalPresent = occupancy?.total_present ?? 0;
-  const totalRoster = occupancy?.total_roster ?? 0;
-  const totalCapacity = occupancy?.total_capacity ?? 0;
-  const utilization = totalCapacity > 0 ? (totalPresent / totalCapacity) * 100 : 0;
+  // Calculate number of days in the date range (fallback)
+  const calculatedNumDays = useMemo(() => {
+    try {
+      const from = parseISO(activeFilters.date_from);
+      const to = parseISO(activeFilters.date_to);
+      return Math.max(1, differenceInDays(to, from) + 1);
+    } catch {
+      return 1;
+    }
+  }, [activeFilters.date_from, activeFilters.date_to]);
+
+  // Use backend num_days if available, otherwise fallback
+  const numDays = occupancy?.num_days ?? calculatedNumDays;
+
+  // Totals (prefer raw sums from backend for accuracy)
+  const totalBusPresent = occupancy?.total_bus_present ?? 0; // Average
+  const totalBusCapacity = occupancy?.total_bus_capacity ?? 0; // Average
+  const totalPresent = occupancy?.total_present ?? 0; // Average
+  const totalRoster = occupancy?.total_roster ?? 0; // Average
+
+  const totalBusPresentSum = occupancy?.total_bus_present_sum ?? (totalBusPresent * numDays);
+  const totalBusCapacitySum = (occupancy?.total_bus_capacity ?? 0) * numDays; // Capacity sums not returned yet, calculate
+  const totalPresentSum = occupancy?.total_present_sum ?? (totalPresent * numDays);
+
+  const busUtilization = totalBusCapacity > 0 ? (totalBusPresent / totalBusCapacity) * 100 : 0;
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-100">
+    <div className="flex flex-col min-h-screen bg-slate-50">
       <DashboardHeader
         mode={mode}
         onModeChange={setMode}
@@ -165,6 +221,9 @@ export default function BusDashboard() {
         onSearch={handleSearch}
         loading={loading}
         lastUpdated={lastUpdated}
+        filterOptions={filterOptions}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
       />
 
       {mode === 'live' && !alertDismissed && (
@@ -179,36 +238,42 @@ export default function BusDashboard() {
       <div className="flex flex-1 overflow-hidden">
         {mode === 'live' && (
           <Sidebar
-            present={totalPresent}
-            roster={totalRoster}
-            utilization={utilization}
-            capacity={totalCapacity}
+            busPresent={totalBusPresent}
+            busUtilization={busUtilization}
+            busCapacity={totalBusCapacity}
             criticalCount={severityCounts.critical}
             warningCount={severityCounts.warning}
             showOverloaded={quickFilters.overloaded}
             showUnderutilized={quickFilters.underutilized}
-            showHighAbsent={quickFilters.highAbsent}
-            selectedZone={quickFilters.zone}
-            zones={allZones}
+            selectedPlant={quickFilters.plant}
+            plants={allPlants}
             onFilterChange={handleQuickFilterChange}
           />
         )}
 
         <main className="flex-1 overflow-auto p-4">
           {loading && !occupancy ? (
-            <div className="flex flex-col items-center justify-center py-20 text-cyan-600">
+            <div className="flex flex-col items-center justify-center py-20 text-emerald-600">
               <Loader2 className="w-10 h-10 animate-spin mb-4" />
               <p className="text-sm font-medium">Loading...</p>
             </div>
           ) : occupancy ? (
             mode === 'live' ? (
-              <ZoneTable zones={zones} onBusClick={(bus) => setSelectedBus(bus)} />
+              <PlantTable plants={plants} onBusClick={(bus) => setSelectedBus(bus)} />
             ) : (
-              <AnalyticsDashboard
-                zones={zones}
+              <PlantAnalyticsDashboard
+                plants={plants}
+                totalBusPresent={totalBusPresent}
+                totalBusCapacity={totalBusCapacity}
                 totalPresent={totalPresent}
                 totalRoster={totalRoster}
-                totalCapacity={totalCapacity}
+                // Raw sums for accuracy
+                totalBusPresentSum={totalBusPresentSum}
+                totalBusCapacitySum={totalBusCapacitySum}
+                totalPresentSum={totalPresentSum}
+                dateFrom={activeFilters.date_from}
+                dateTo={activeFilters.date_to}
+                numDays={numDays}
               />
             )
           ) : null}
@@ -218,7 +283,11 @@ export default function BusDashboard() {
       {selectedBus && (
         <BusDetailDrawer
           busId={selectedBus.bus_id}
-          filters={activeFilters}
+          filters={{
+            date_from: activeFilters.date_from,
+            date_to: activeFilters.date_to,
+            shift: activeFilters.shifts.length === 1 ? activeFilters.shifts[0] : undefined,
+          }}
           onClose={() => setSelectedBus(null)}
         />
       )}

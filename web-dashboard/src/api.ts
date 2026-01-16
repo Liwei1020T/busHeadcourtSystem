@@ -6,6 +6,8 @@ import {
   HeadcountResponse,
   AttendanceRecord,
   FilterParams,
+  FilterOptions,
+  LegacyFilterParams,
   BusInfo,
   BusInput,
   EmployeeInfo,
@@ -46,9 +48,9 @@ async function downloadCsv(url: string, fallbackName: string) {
 /**
  * Fetch headcount with optional filters.
  */
-export async function fetchHeadcount(params: Partial<FilterParams>): Promise<HeadcountResponse> {
+export async function fetchHeadcount(params: LegacyFilterParams): Promise<HeadcountResponse> {
   const searchParams = new URLSearchParams();
-  
+
   if (params.date_from) searchParams.append('date_from', params.date_from);
   if (params.date_to) searchParams.append('date_to', params.date_to);
   if (params.shift) searchParams.append('shift', params.shift);
@@ -89,7 +91,7 @@ export async function fetchAttendance(date: string, shift?: string, bus_id?: str
 /**
  * Download headcount CSV using the same filters as the JSON endpoint.
  */
-export async function exportHeadcountCsv(params: Partial<FilterParams>): Promise<void> {
+export async function exportHeadcountCsv(params: LegacyFilterParams): Promise<void> {
   const searchParams = new URLSearchParams();
   if (params.date_from) searchParams.append('date_from', params.date_from);
   if (params.date_to) searchParams.append('date_to', params.date_to);
@@ -249,9 +251,20 @@ export async function fetchOccupancy(params: Partial<FilterParams>): Promise<Occ
   const searchParams = new URLSearchParams();
   if (params.date_from) searchParams.append('date_from', params.date_from);
   if (params.date_to) searchParams.append('date_to', params.date_to);
-  if (params.shift) searchParams.append('shift', params.shift);
-  if (params.bus_id) searchParams.append('bus_id', params.bus_id);
-  if (params.route) searchParams.append('route', params.route);
+
+  // Support multi-select arrays
+  if (params.shifts && params.shifts.length > 0) {
+    searchParams.append('shift', params.shifts.join(','));
+  }
+  if (params.bus_ids && params.bus_ids.length > 0) {
+    searchParams.append('bus_id', params.bus_ids.join(','));
+  }
+  if (params.routes && params.routes.length > 0) {
+    searchParams.append('route', params.routes.join(','));
+  }
+  if (params.plants && params.plants.length > 0) {
+    searchParams.append('plant', params.plants.join(','));
+  }
 
   const url = `${API_BASE}/report/occupancy?${searchParams.toString()}`;
   const response = await fetch(url);
@@ -263,8 +276,21 @@ export async function fetchOccupancy(params: Partial<FilterParams>): Promise<Occ
   return response.json();
 }
 
+/**
+ * Fetch available filter options for multi-select dropdowns.
+ */
+export async function fetchFilterOptions(): Promise<FilterOptions> {
+  const response = await fetch(`${API_BASE}/report/occupancy/filters`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch filter options: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
 export async function fetchBusDetail(
-  params: Partial<FilterParams> & { bus_id: string; include_inactive?: boolean },
+  params: { date_from?: string; date_to?: string; shift?: string; bus_id: string; include_inactive?: boolean },
 ): Promise<BusDetailResponse> {
   const searchParams = new URLSearchParams();
   if (params.date_from) searchParams.append('date_from', params.date_from);

@@ -3,7 +3,7 @@ import { OccupancyBusRow } from '../types';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { ArrowUpDown, AlertCircle, AlertTriangle, Users } from 'lucide-react';
+import { ArrowUpDown, AlertCircle, Users } from 'lucide-react';
 
 type OccupancyTableProps = {
   data: OccupancyBusRow[];
@@ -21,13 +21,21 @@ export default function OccupancyTable({ data, onBusClick }: OccupancyTableProps
 
   const filteredData = useMemo(() => {
     return data.filter(row => {
-      if (hideOwn && (row.route?.toUpperCase().includes('OWN') || row.bus_id.toUpperCase().includes('OWN'))) {
+      // Hide OWN/UNKN (own transport and unknown)
+      const busIdUpper = row.bus_id.toUpperCase();
+      const routeUpper = row.route?.toUpperCase() || '';
+      if (hideOwn && (
+        busIdUpper === 'OWN' ||
+        busIdUpper === 'UNKN' ||
+        busIdUpper.includes('OWN') ||
+        routeUpper.includes('OWN')
+      )) {
         return false;
       }
 
       if (showProblemsOnly) {
          const absentCount = Math.max(0, row.total_roster - row.total_present);
-         return row.unknown_batch > 0 || row.unknown_shift > 0 || absentCount > 0;
+         return absentCount > 0;
       }
       return true;
     });
@@ -125,7 +133,6 @@ export default function OccupancyTable({ data, onBusClick }: OccupancyTableProps
               <SortHeader field="total_capacity" label="Cap (Tot)" align="right" />
               <SortHeader field="total_present" label="Actual" align="right" />
               <SortHeader field="absent_count" label="Absent" align="right" />
-              <SortHeader field="unknown_batch" label="Unknown" align="right" />
               <SortHeader field="utilization" label="Util %" align="right" />
               <SortHeader field="total_roster" label="Roster" align="right" />
             </tr>
@@ -135,7 +142,6 @@ export default function OccupancyTable({ data, onBusClick }: OccupancyTableProps
                const absent = Math.max(0, row.total_roster - row.total_present);
                const utilization = row.total_capacity > 0 ? (row.total_present / row.total_capacity) * 100 : 0;
                const attendanceRate = row.total_roster > 0 ? (row.total_present / row.total_roster) * 100 : 0;
-               const totalUnknowns = row.unknown_batch + row.unknown_shift;
 
                return (
                 <tr 
@@ -168,15 +174,6 @@ export default function OccupancyTable({ data, onBusClick }: OccupancyTableProps
 
                   <td className={`px-3 py-2.5 text-right font-medium ${absent > 0 ? 'text-red-600' : 'text-gray-300'}`}>
                     {absent > 0 ? absent : '-'}
-                  </td>
-
-                  <td className="px-3 py-2.5 text-right">
-                    {totalUnknowns > 0 ? (
-                      <div className="flex items-center justify-end gap-1 text-amber-600 font-bold">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        {totalUnknowns}
-                      </div>
-                    ) : <span className="text-gray-300">-</span>}
                   </td>
 
                   <td className="px-3 py-2.5 text-right">

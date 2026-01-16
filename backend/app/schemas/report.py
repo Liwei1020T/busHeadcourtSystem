@@ -38,13 +38,23 @@ class AttendanceRecord(BaseModel):
 class OccupancyBusRow(BaseModel):
     bus_id: str
     route: Optional[str] = None
+    building_id: Optional[str] = None  # Plant: P1, P2, BK
     bus_capacity: int
     van_count: int = 0
     van_capacity: int
     total_capacity: int
+
+    # Averages (per day)
     bus_present: int
     van_present: int
     total_present: int
+
+    # Raw Totals (sum over num_days)
+    num_days: int = 1
+    bus_present_sum: int = 0
+    van_present_sum: int = 0
+    total_present_sum: int = 0
+
     bus_roster: int
     van_roster: int
     total_roster: int
@@ -52,13 +62,23 @@ class OccupancyBusRow(BaseModel):
 
 class OccupancyResponse(BaseModel):
     rows: List[OccupancyBusRow] = []
+    num_days: int = 1  # Global num_days for the query context
+
     total_van_count: int = 0
     total_bus_capacity: int
     total_van_capacity: int
     total_capacity: int
+
+    # Averages
     total_bus_present: int
     total_van_present: int
     total_present: int
+
+    # Raw Totals
+    total_bus_present_sum: int = 0
+    total_van_present_sum: int = 0
+    total_present_sum: int = 0
+
     total_bus_roster: int
     total_van_roster: int
     total_roster: int
