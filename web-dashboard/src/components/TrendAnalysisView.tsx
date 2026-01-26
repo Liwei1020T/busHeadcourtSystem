@@ -1,13 +1,14 @@
 // web-dashboard/src/components/TrendAnalysisView.tsx
 
 import { useEffect, useState, useMemo } from 'react';
-import { format, subDays } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, subMonths, addDays } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Loader2, TrendingUp, TrendingDown, Users, UserCheck, Download, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AttendanceRateTrendChart from './charts/AttendanceRateTrendChart';
 import { fetchTrendData } from '../api';
 import { TrendAnalysisData, FilterParams, TrendBreakdown, TrendView } from '../types';
+import { aggregateToWeekly } from '../utils/weeklyAggregation';
 
 type TrendAnalysisViewProps = {
   filters: FilterParams;
@@ -111,6 +112,28 @@ export default function TrendAnalysisView({ filters, onFilterChange }: TrendAnal
     return { label: `Down ${Math.abs(change).toFixed(1)}%`, icon: '↓', color: 'text-red-600' };
   }, [trendData]);
 
+  // Transform data based on view mode (daily vs weekly)
+  const displayData = useMemo(() => {
+    if (!trendData) return null;
+
+    if (view === 'weekly') {
+      return aggregateToWeekly(trendData.daily);
+    }
+
+    return trendData.daily;
+  }, [trendData, view]);
+
+  // Transform previous data for comparison
+  const displayPreviousData = useMemo(() => {
+    if (!trendData?.previous || !showComparison) return undefined;
+
+    if (view === 'weekly') {
+      return aggregateToWeekly(trendData.previous);
+    }
+
+    return trendData.previous;
+  }, [trendData, view, showComparison]);
+
   // Export CSV handler
   const handleExport = () => {
     if (!trendData) return;
@@ -193,6 +216,74 @@ export default function TrendAnalysisView({ filters, onFilterChange }: TrendAnal
         </div>
       </div>
 
+      {/* Quick Date Selection */}
+      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+        <div className="text-xs font-medium text-slate-600 mb-2">Quick Date Selection:</div>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              const today = format(new Date(), 'yyyy-MM-dd');
+              onFilterChange({ ...filters, date_from: today, date_to: today });
+            }}
+            className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-emerald-400 transition-colors"
+          >
+            Today
+          </button>
+          <button
+            onClick={() => {
+              const today = new Date();
+              onFilterChange({
+                ...filters,
+                date_from: format(subDays(today, 6), 'yyyy-MM-dd'),
+                date_to: format(today, 'yyyy-MM-dd'),
+              });
+            }}
+            className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-emerald-400 transition-colors"
+          >
+            Last 7 Days
+          </button>
+          <button
+            onClick={() => {
+              const today = new Date();
+              onFilterChange({
+                ...filters,
+                date_from: format(subDays(today, 29), 'yyyy-MM-dd'),
+                date_to: format(today, 'yyyy-MM-dd'),
+              });
+            }}
+            className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-emerald-400 transition-colors"
+          >
+            Last 30 Days
+          </button>
+          <button
+            onClick={() => {
+              const today = new Date();
+              onFilterChange({
+                ...filters,
+                date_from: format(startOfMonth(today), 'yyyy-MM-dd'),
+                date_to: format(today, 'yyyy-MM-dd'),
+              });
+            }}
+            className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-emerald-400 transition-colors"
+          >
+            This Month
+          </button>
+          <button
+            onClick={() => {
+              const lastMonth = subMonths(new Date(), 1);
+              onFilterChange({
+                ...filters,
+                date_from: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
+                date_to: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
+              });
+            }}
+            className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-emerald-400 transition-colors"
+          >
+            Last Month
+          </button>
+        </div>
+      </div>
+
       {/* Loading state */}
       {loading && !trendData && (
         <div className="flex flex-col items-center justify-center py-20 text-emerald-600">
@@ -250,9 +341,10 @@ export default function TrendAnalysisView({ filters, onFilterChange }: TrendAnal
 
           {/* Main Chart */}
           <AttendanceRateTrendChart
-            data={trendData.daily}
-            previousData={trendData.previous}
-            showComparison={showComparison && !!trendData.previous}
+            data={displayData}
+            previousData={displayPreviousData}
+            showComparison={showComparison && !!displayPreviousData}
+            viewMode={view}
           />
         </>
       )}

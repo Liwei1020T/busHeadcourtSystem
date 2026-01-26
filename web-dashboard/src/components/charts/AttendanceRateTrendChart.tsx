@@ -1,7 +1,7 @@
 // web-dashboard/src/components/charts/AttendanceRateTrendChart.tsx
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, endOfWeek } from 'date-fns';
 import { TrendingUp } from 'lucide-react';
 import { TrendDataPoint } from '../../types';
 
@@ -9,19 +9,33 @@ type AttendanceRateTrendChartProps = {
   data: TrendDataPoint[];
   previousData?: TrendDataPoint[];
   showComparison?: boolean;
+  viewMode?: 'daily' | 'weekly';
 };
 
 export default function AttendanceRateTrendChart({
   data,
   previousData,
   showComparison = false,
+  viewMode = 'daily',
 }: AttendanceRateTrendChartProps) {
   // Format dates for display
   const chartData = data.map((d, index) => {
+    const date = parseISO(d.date);
+    let dateDisplay: string;
+
+    if (viewMode === 'weekly') {
+      // For weekly view, show week range
+      const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+      dateDisplay = `${format(date, 'MMM dd')}-${format(weekEnd, 'dd')}`;
+    } else {
+      // For daily view, show date
+      dateDisplay = format(date, 'MMM dd');
+    }
+
     const formatted: any = {
       ...d,
-      dateDisplay: format(parseISO(d.date), 'MMM dd'),
-      dayName: format(parseISO(d.date), 'EEE'), // Mon, Tue, Wed...
+      dateDisplay,
+      dayName: format(date, 'EEE'), // Mon, Tue, Wed...
     };
 
     // Add previous period data if available and aligned
