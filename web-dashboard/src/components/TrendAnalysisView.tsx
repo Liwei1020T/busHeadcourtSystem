@@ -139,7 +139,7 @@ export default function TrendAnalysisView({ filters, onFilterChange }: TrendAnal
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-lg font-bold text-slate-800">出勤趋势分析 (Attendance Trends)</h2>
+          <h2 className="text-lg font-bold text-slate-800">Attendance Trends</h2>
           {filters.date_from && filters.date_to && (
             <span className="flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">
               <Calendar className="w-3 h-3" />

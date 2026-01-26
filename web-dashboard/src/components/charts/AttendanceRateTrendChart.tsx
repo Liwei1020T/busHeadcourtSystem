@@ -109,8 +109,8 @@ export default function AttendanceRateTrendChart({
                 labelStyle={{ color: '#1e293b', fontWeight: 600, marginBottom: '8px' }}
                 formatter={(value: number, name: string) => {
                   if (name === 'attendance_rate') return [`${value.toFixed(1)}%`, 'Attendance Rate'];
-                  if (name === 'roster') return [value.toLocaleString(), 'Expected (应该来)'];
-                  if (name === 'present') return [value.toLocaleString(), 'Actual (实际来)'];
+                  if (name === 'roster') return [value.toLocaleString(), 'Expected'];
+                  if (name === 'present') return [value.toLocaleString(), 'Actual'];
                   if (name === 'prev_attendance_rate') return [`${value.toFixed(1)}%`, 'Prev Rate'];
                   if (name === 'prev_roster') return [value.toLocaleString(), 'Prev Expected'];
                   if (name === 'prev_present') return [value.toLocaleString(), 'Prev Actual'];
@@ -122,8 +122,8 @@ export default function AttendanceRateTrendChart({
               <Legend
                 wrapperStyle={{ fontSize: '12px' }}
                 formatter={(value) => {
-                  if (value === 'roster') return 'Expected (应该来)';
-                  if (value === 'present') return 'Actual (实际来)';
+                  if (value === 'roster') return 'Expected';
+                  if (value === 'present') return 'Actual';
                   if (value === 'attendance_rate') return 'Attendance Rate %';
                   if (value === 'prev_roster') return 'Prev Expected';
                   if (value === 'prev_present') return 'Prev Actual';
