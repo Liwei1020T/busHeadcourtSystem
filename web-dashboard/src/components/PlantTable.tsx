@@ -96,18 +96,18 @@ function PlantHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-4 text-sm">
-        <div className="flex flex-col items-end">
-          <span className="font-bold text-lg font-mono">{plant.avgUtilization.toFixed(1)}%</span>
-          <span className="text-xs text-slate-500">Utilization</span>
+      <div className="flex items-center gap-6 text-sm">
+        <div className="flex flex-col items-end min-w-[90px]">
+          <span className="font-bold text-base font-mono">{plant.avgUtilization.toFixed(1)}%</span>
+          <span className="text-xs text-slate-500 whitespace-nowrap">Utilization</span>
         </div>
-        <div className="flex flex-col items-end">
-          <span className="font-bold text-lg font-mono">{plant.avgAttendanceRate.toFixed(1)}%</span>
-          <span className="text-xs text-slate-500">Attendance</span>
+        <div className="flex flex-col items-end min-w-[90px]">
+          <span className="font-bold text-base font-mono">{plant.avgAttendanceRate.toFixed(1)}%</span>
+          <span className="text-xs text-slate-500 whitespace-nowrap">Attendance</span>
         </div>
-        <div className="flex flex-col items-end">
-          <span className="font-bold text-lg font-mono text-blue-600">{plant.totalPresent.toLocaleString()}</span>
-          <span className="text-xs text-slate-500">Passengers</span>
+        <div className="flex flex-col items-end min-w-[90px]">
+          <span className="font-bold text-base font-mono text-blue-600">{plant.totalPresent.toLocaleString()}</span>
+          <span className="text-xs text-slate-500 whitespace-nowrap">Passengers</span>
         </div>
       </div>
     </button>
