@@ -23,7 +23,7 @@ export default function PlantCostAnalysisCard({ plants }: PlantCostAnalysisCardP
 
   const underutilizedBuses = plants.reduce(
     (sum, p) => sum + p.buses.filter(b =>
-      b.bus_capacity > 0 && (b.bus_present / b.bus_capacity * 100) < 30
+      b.bus_capacity > 0 && (b.total_present / b.bus_capacity * 100) < 30
     ).length,
     0
   );
@@ -39,7 +39,7 @@ export default function PlantCostAnalysisCard({ plants }: PlantCostAnalysisCardP
       emptySeats,
       waste: emptySeats * 0.5,
       underutilized: p.buses.filter(b =>
-        b.bus_capacity > 0 && (b.bus_present / b.bus_capacity * 100) < 30
+        b.bus_capacity > 0 && (b.total_present / b.bus_capacity * 100) < 30
       ).length
     };
   }).sort((a, b) => b.emptySeats - a.emptySeats);

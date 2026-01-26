@@ -134,7 +134,7 @@ export default function OccupancyTable({ data, onBusClick }: OccupancyTableProps
               <SortHeader field="total_present" label="Actual" align="right" />
               <SortHeader field="absent_count" label="Absent" align="right" />
               <SortHeader field="utilization" label="Util %" align="right" />
-              <SortHeader field="total_roster" label="Roster" align="right" />
+              <SortHeader field="total_roster" label="Total" align="right" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

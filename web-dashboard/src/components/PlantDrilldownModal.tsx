@@ -11,8 +11,8 @@ type PlantDrilldownModalProps = {
 
 export default function PlantDrilldownModal({ plant, onClose }: PlantDrilldownModalProps) {
   const sortedBuses = [...plant.buses].sort((a, b) => {
-    const utilA = a.bus_capacity > 0 ? (a.bus_present / a.bus_capacity) * 100 : 0;
-    const utilB = b.bus_capacity > 0 ? (b.bus_present / b.bus_capacity) * 100 : 0;
+    const utilA = a.bus_capacity > 0 ? (a.total_present / a.bus_capacity) * 100 : 0;
+    const utilB = b.bus_capacity > 0 ? (b.total_present / b.bus_capacity) * 100 : 0;
     return utilB - utilA;
   });
 
@@ -94,7 +94,7 @@ export default function PlantDrilldownModal({ plant, onClose }: PlantDrilldownMo
             <tbody className="divide-y divide-slate-100">
               {sortedBuses.map((bus) => {
                 const utilization = bus.bus_capacity > 0
-                  ? (bus.bus_present / bus.bus_capacity) * 100
+                  ? (bus.total_present / bus.bus_capacity) * 100
                   : 0;
                 const severity = getSeverityLevel(utilization);
 
@@ -112,7 +112,7 @@ export default function PlantDrilldownModal({ plant, onClose }: PlantDrilldownMo
                     <td className="px-6 py-3 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <Users className="w-3 h-3 text-slate-400" />
-                        <span className="font-medium">{bus.bus_present}</span>
+                        <span className="font-medium">{bus.total_present}</span>
                       </div>
                     </td>
                     <td className="px-6 py-3 text-center text-slate-600">

@@ -1,13 +1,11 @@
 // web-dashboard/src/components/PlantTable.tsx
 
 import { useState, useMemo } from 'react';
-import * as ReactWindow from 'react-window';
+import { VariableSizeList as List } from 'react-window';
 import { ChevronDown, ChevronRight, ArrowRight } from 'lucide-react';
 import { OccupancyBusRow } from '../types';
 import { PlantGroup } from '../utils/plants';
 import { getSeverityLevel } from '../lib/theme';
-
-const List = ReactWindow.VariableSizeList;
 
 type PlantTableProps = {
   plants: PlantGroup[];
@@ -125,7 +123,7 @@ function TableHeaderRow() {
       <div className="px-4 py-2 w-20 text-right flex-shrink-0">Bus Pres</div>
       <div className="px-4 py-2 w-20 text-right flex-shrink-0">Van</div>
       <div className="px-4 py-2 w-20 text-right flex-shrink-0">Total</div>
-      <div className="px-4 py-2 w-20 text-right flex-shrink-0">Roster</div>
+      <div className="px-4 py-2 w-20 text-right flex-shrink-0">Total</div>
       <div className="px-4 py-2 w-28 text-right flex-shrink-0">Util %</div>
       <div className="px-4 py-2 w-24 text-right flex-shrink-0">Attend %</div>
       <div className="px-4 py-2 w-12 text-right flex-shrink-0"></div>
@@ -140,8 +138,8 @@ function BusRow({
   bus: OccupancyBusRow;
   onClick: () => void;
 }) {
-  // Utilization based on bus_capacity only
-  const utilization = bus.bus_capacity > 0 ? (bus.bus_present / bus.bus_capacity) * 100 : 0;
+  // Utilization based on bus_capacity only (all passengers including van use bus capacity)
+  const utilization = bus.bus_capacity > 0 ? (bus.total_present / bus.bus_capacity) * 100 : 0;
   const attendance = bus.total_roster > 0 ? (bus.total_present / bus.total_roster) * 100 : 0;
   const severity = getSeverityLevel(utilization);
 
@@ -180,12 +178,12 @@ function BusRow({
         {bus.bus_capacity}
       </div>
       <div className="px-4 py-3 w-20 text-right font-mono text-slate-600 text-sm flex-shrink-0">
-        {bus.bus_present}
+        {bus.total_present}
       </div>
       <div className="px-4 py-3 w-20 text-right flex-shrink-0">
         {bus.van_count > 0 && (
           <span className="text-xs text-slate-400">
-            +{bus.van_present}/{bus.van_capacity}
+            ({bus.van_present} via van)
           </span>
         )}
       </div>
@@ -200,9 +198,8 @@ function BusRow({
           <span>{utilization.toFixed(1)}%</span>
           <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${
-                utilization > 100 ? 'bg-red-500' : utilization > 80 ? 'bg-emerald-500' : utilization < 30 ? 'bg-red-400' : 'bg-blue-500'
-              }`}
+              className={`h-full rounded-full transition-all ${utilization > 100 ? 'bg-red-500' : utilization > 80 ? 'bg-emerald-500' : utilization < 30 ? 'bg-red-400' : 'bg-blue-500'
+                }`}
               style={{ width: `${Math.min(utilization, 100)}%` }}
             />
           </div>

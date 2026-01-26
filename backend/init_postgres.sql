@@ -35,7 +35,7 @@ CREATE TABLE buses (
     route        TEXT NOT NULL,
     plate_number VARCHAR(50),
     capacity     INTEGER DEFAULT 40 CHECK (capacity IS NULL OR capacity > 0),
-    CHECK (char_length(bus_id) <= 4)
+    CHECK (char_length(bus_id) <= 10)
 );
 
 -- ------------------------------------------------------------
@@ -45,7 +45,7 @@ CREATE TABLE buses (
 CREATE TABLE vans (
     id           SERIAL PRIMARY KEY,
     van_code     VARCHAR(20) UNIQUE NOT NULL,
-    bus_id       VARCHAR(10) NOT NULL REFERENCES buses(bus_id) ON DELETE CASCADE,
+    bus_id       VARCHAR(10) REFERENCES buses(bus_id) ON DELETE CASCADE,
     plate_number VARCHAR(50),
     driver_name  VARCHAR(100),
     capacity     INTEGER DEFAULT 12 CHECK (capacity IS NULL OR capacity > 0),
@@ -63,7 +63,7 @@ CREATE TABLE employees (
     id        SERIAL PRIMARY KEY,
     batch_id  BIGINT UNIQUE NOT NULL CHECK (batch_id > 0),
     name      VARCHAR(100) NOT NULL,
-    bus_id    VARCHAR(10) NOT NULL REFERENCES buses(bus_id) ON DELETE RESTRICT,
+    bus_id    VARCHAR(10) REFERENCES buses(bus_id) ON DELETE RESTRICT,
     van_id    INTEGER REFERENCES vans(id),
     active    BOOLEAN NOT NULL DEFAULT TRUE
 );
@@ -122,7 +122,7 @@ CREATE TABLE attendances (
     bus_id           VARCHAR(10) REFERENCES buses(bus_id),
     van_id           INTEGER REFERENCES vans(id),
     shift            attendance_shift NOT NULL DEFAULT 'unknown',
-    status           VARCHAR(30) NOT NULL CHECK (status IN ('present', 'unknown_batch', 'unknown_shift')),
+    status           VARCHAR(30) NOT NULL CHECK (status IN ('present', 'unknown_shift', 'offday', 'absent')),
     scanned_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
     scanned_on       DATE NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kuala_Lumpur')::date),
     source           VARCHAR(50)

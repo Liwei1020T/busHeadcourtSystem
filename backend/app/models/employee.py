@@ -16,7 +16,7 @@ class Employee(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     batch_id = Column(BigInteger, unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
-    bus_id = Column(String(10), ForeignKey("buses.bus_id"), nullable=False, index=True)
+    bus_id = Column(String(10), ForeignKey("buses.bus_id"), nullable=True, index=True)
     van_id = Column(Integer, ForeignKey("vans.id"), nullable=True, index=True)
     active = Column(Boolean, default=True)
 

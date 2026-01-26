@@ -16,8 +16,8 @@ export default function RouteDrilldownModal({
   onClose,
   onBusClick,
 }: RouteDrilldownModalProps) {
-  // Calculate route stats
-  const totalPassengers = buses.reduce((acc, b) => acc + b.bus_present, 0);
+  // Calculate route stats - use total_present (bus + van passengers)
+  const totalPassengers = buses.reduce((acc, b) => acc + b.total_present, 0);
   const totalCapacity = buses.reduce((acc, b) => acc + b.bus_capacity, 0);
   const avgUtilization = totalCapacity > 0 ? (totalPassengers / totalCapacity) * 100 : 0;
 
@@ -93,12 +93,12 @@ export default function RouteDrilldownModal({
             <tbody className="divide-y divide-slate-100">
               {buses
                 .sort((a, b) => {
-                  const utilA = a.bus_capacity > 0 ? (a.bus_present / a.bus_capacity) * 100 : 0;
-                  const utilB = b.bus_capacity > 0 ? (b.bus_present / b.bus_capacity) * 100 : 0;
+                  const utilA = a.bus_capacity > 0 ? (a.total_present / a.bus_capacity) * 100 : 0;
+                  const utilB = b.bus_capacity > 0 ? (b.total_present / b.bus_capacity) * 100 : 0;
                   return utilB - utilA;
                 })
                 .map((bus) => {
-                  const util = bus.bus_capacity > 0 ? (bus.bus_present / bus.bus_capacity) * 100 : 0;
+                  const util = bus.bus_capacity > 0 ? (bus.total_present / bus.bus_capacity) * 100 : 0;
                   return (
                     <tr
                       key={bus.bus_id}
@@ -109,7 +109,7 @@ export default function RouteDrilldownModal({
                         <span className="font-medium text-slate-800">{bus.bus_id}</span>
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-slate-600">
-                        {bus.bus_present}
+                        {bus.total_present}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-slate-500">
                         {bus.bus_capacity}

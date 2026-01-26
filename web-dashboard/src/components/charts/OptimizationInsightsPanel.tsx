@@ -61,25 +61,25 @@ export default function OptimizationInsightsPanel({
     // Find routes with multiple underutilized buses that could merge
     busesByRoute.forEach((data, route) => {
       const underutilizedBuses = data.buses.filter((b) => {
-        const util = b.bus_capacity > 0 ? (b.bus_present / b.bus_capacity) * 100 : 0;
-        return util < 70 && b.bus_present > 0; // Less than 70% utilized
+        const util = b.bus_capacity > 0 ? (b.total_present / b.bus_capacity) * 100 : 0;
+        return util < 70 && b.total_present > 0; // Less than 70% utilized
       });
 
       if (underutilizedBuses.length >= 2) {
         // Sort by passengers descending
-        const sorted = [...underutilizedBuses].sort((a, b) => b.bus_present - a.bus_present);
+        const sorted = [...underutilizedBuses].sort((a, b) => b.total_present - a.total_present);
 
         // Try to combine buses
         let combinedPassengers = 0;
         const busesToCombine: { busId: string; passengers: number; utilization: number }[] = [];
 
         for (const bus of sorted) {
-          if (combinedPassengers + bus.bus_present <= busCapacityMax) {
-            combinedPassengers += bus.bus_present;
-            const util = bus.bus_capacity > 0 ? (bus.bus_present / bus.bus_capacity) * 100 : 0;
+          if (combinedPassengers + bus.total_present <= busCapacityMax) {
+            combinedPassengers += bus.total_present;
+            const util = bus.bus_capacity > 0 ? (bus.total_present / bus.bus_capacity) * 100 : 0;
             busesToCombine.push({
               busId: bus.bus_id,
-              passengers: bus.bus_present,
+              passengers: bus.total_present,
               utilization: Math.round(util),
             });
           }
@@ -125,7 +125,7 @@ export default function OptimizationInsightsPanel({
 
         const entry = routeMap.get(routeKey)!;
         entry.busCount += 1;
-        entry.totalPassengers += bus.bus_present;
+        entry.totalPassengers += bus.total_present;
         entry.totalCapacity += bus.bus_capacity;
       });
     });
@@ -158,7 +158,7 @@ export default function OptimizationInsightsPanel({
       plantGroup.buses.forEach((bus) => {
         if (bus.bus_capacity > 0) {
           currentBuses += 1;
-          totalPassengers += bus.bus_present;
+          totalPassengers += bus.total_present;
         }
       });
 

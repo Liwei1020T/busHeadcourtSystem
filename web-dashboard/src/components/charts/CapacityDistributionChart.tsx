@@ -37,7 +37,7 @@ export default function CapacityDistributionChart({ plants }: CapacityDistributi
       plantGroup.buses.forEach((bus) => {
         if (bus.bus_capacity <= 0) return;
 
-        const utilization = (bus.bus_present / bus.bus_capacity) * 100;
+        const utilization = (bus.total_present / bus.bus_capacity) * 100;
 
         for (let i = 0; i < UTILIZATION_RANGES.length; i++) {
           const range = UTILIZATION_RANGES[i];

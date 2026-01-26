@@ -29,7 +29,7 @@ export default function RoutePerformanceChart({ plants, onRouteClick }: RoutePer
       const route = bus.route || 'Unknown';
       const existing = routeMap.get(route) || { passengers: 0, capacity: 0, busCount: 0, buses: [] };
       routeMap.set(route, {
-        passengers: existing.passengers + bus.bus_present,
+        passengers: existing.passengers + bus.total_present,
         capacity: existing.capacity + bus.bus_capacity,
         busCount: existing.busCount + 1,
         buses: [...existing.buses, bus],

@@ -425,6 +425,9 @@ def occupancy(
         func.sum(bus_present_case).label("bus_present"),
         func.sum(van_present_case).label("van_present"),
         func.sum(present_case).label("total_present"),
+    ).filter(
+        Attendance.bus_id.is_not(None),
+        Attendance.bus_id != 'OWN'
     )
 
     if target_date:
@@ -463,7 +466,11 @@ def occupancy(
         func.sum(case((Employee.van_id.is_(None), 1), else_=0)).label("bus_roster"),
         func.sum(case((Employee.van_id.is_not(None), 1), else_=0)).label("van_roster"),
         func.count(Employee.id).label("total_roster"),
-    ).filter(Employee.active.is_(True))
+    ).filter(
+        Employee.active.is_(True),
+        Employee.bus_id.is_not(None),
+        Employee.bus_id != 'OWN'
+    )
 
     if bus_ids:
         roster_query = roster_query.filter(Employee.bus_id.in_(bus_ids))

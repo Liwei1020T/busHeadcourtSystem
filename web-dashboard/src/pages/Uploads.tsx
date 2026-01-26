@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import PageHeader from '../components/PageHeader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { uploadAttendance, uploadMasterList } from '../api';
+import { uploadAttendance, uploadMasterList, deleteAttendanceByDate } from '../api';
 import type { AttendanceUploadResponse, MasterListUploadResponse, UploadRowError } from '../types';
-import { FileSpreadsheet, UploadCloud, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { FileSpreadsheet, UploadCloud, AlertTriangle, CheckCircle2, XCircle, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 function formatError(err: UploadRowError) {
@@ -18,11 +18,16 @@ export default function Uploads() {
 
   const [uploadingMaster, setUploadingMaster] = useState(false);
   const [uploadingAttendance, setUploadingAttendance] = useState(false);
+  const [deletingAttendance, setDeletingAttendance] = useState(false);
 
   const [masterResult, setMasterResult] = useState<MasterListUploadResponse | null>(null);
   const [attendanceResult, setAttendanceResult] = useState<AttendanceUploadResponse | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+
+  // Delete attendance state
+  const [deleteDateFrom, setDeleteDateFrom] = useState('');
+  const [deleteDateTo, setDeleteDateTo] = useState('');
 
   const masterErrorPreview = useMemo(() => (masterResult?.row_errors || []).slice(0, 20), [masterResult]);
   const attendanceErrorPreview = useMemo(() => (attendanceResult?.row_errors || []).slice(0, 20), [attendanceResult]);
@@ -74,6 +79,40 @@ export default function Uploads() {
       toast.error(message, { id: toastId });
     } finally {
       setUploadingAttendance(false);
+    }
+  };
+
+  const onDeleteAttendance = async () => {
+    setError(null);
+
+    if (!deleteDateFrom) {
+      setError('Please select a start date');
+      return;
+    }
+
+    const dateRange = deleteDateTo ? `${deleteDateFrom} to ${deleteDateTo}` : deleteDateFrom;
+    const confirmMsg = `Are you sure you want to delete all attendance records for ${dateRange}? This action cannot be undone.`;
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    setDeletingAttendance(true);
+    const toastId = toast.loading('Deleting attendance records...');
+
+    try {
+      const result = await deleteAttendanceByDate(deleteDateFrom, deleteDateTo || undefined);
+      toast.success(`Deleted ${result.deleted_count} attendance records`, { id: toastId });
+
+      // Clear the date inputs
+      setDeleteDateFrom('');
+      setDeleteDateTo('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete attendance';
+      setError(message);
+      toast.error(message, { id: toastId });
+    } finally {
+      setDeletingAttendance(false);
     }
   };
 
@@ -204,6 +243,11 @@ export default function Uploads() {
                   <div className="text-emerald-700">
                     Rows: {attendanceResult.processed_rows} · Inserted: {attendanceResult.attendance_inserted} · Duplicates: {attendanceResult.duplicates_ignored} · Unknown: {attendanceResult.unknown_personids}
                   </div>
+                  {attendanceResult.offday_count ? (
+                    <div className="text-emerald-700">
+                      Offdays recorded: {attendanceResult.offday_count}
+                    </div>
+                  ) : null}
                   {(attendanceResult.skipped_no_timein || attendanceResult.skipped_missing_date) ? (
                     <div className="text-emerald-700">
                       Skipped: {attendanceResult.skipped_no_timein || 0} no TimeIn · {attendanceResult.skipped_missing_date || 0} no date
@@ -236,18 +280,61 @@ export default function Uploads() {
         </Card>
       </div>
 
-      <Card className="p-5 border border-amber-200 bg-gradient-to-br from-amber-50/80 to-white">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5" />
-          <div className="text-sm text-amber-900">
-            <div className="font-semibold">Notes</div>
-            <ul className="mt-1 list-disc pl-5 space-y-1">
-              <li>Bus IDs must be short codes (max 4 alphanumeric characters) to satisfy current backend constraints.</li>
-              <li>Current default mapping is Route → bus_id and Transport → van_code. If your files use a different mapping, tell me and I will adjust.</li>
-              <li>Unknown PersonId rows are kept as <span className="font-medium">unknown_batch</span> records for audit.</li>
-            </ul>
+      {/* Delete Attendance Card */}
+      <Card className="p-5 border border-red-200 bg-gradient-to-br from-red-50/30 to-white">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <div className="p-2.5 rounded-xl bg-gradient-to-br from-red-50 to-rose-50">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900">Delete Attendance Records</h2>
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              Remove attendance records for a specific date range. Useful before re-uploading corrected data.
+            </p>
           </div>
         </div>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              From Date <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={deleteDateFrom}
+              onChange={(e) => setDeleteDateFrom(e.target.value)}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              To Date (optional)
+            </label>
+            <input
+              type="date"
+              value={deleteDateTo}
+              onChange={(e) => setDeleteDateTo(e.target.value)}
+              min={deleteDateFrom}
+              className="block w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+            />
+          </div>
+        </div>
+
+        <Button
+          onClick={onDeleteAttendance}
+          disabled={deletingAttendance || !deleteDateFrom}
+          variant="destructive"
+          className="w-full mt-4"
+        >
+          <Trash2 className="w-4 h-4 mr-2" />
+          {deletingAttendance ? 'Deleting...' : 'Delete Attendance Records'}
+        </Button>
+
+        <p className="text-xs text-gray-500 mt-2">
+          ⚠️ This action cannot be undone. You will be asked to confirm before deletion.
+        </p>
       </Card>
     </div>
   );

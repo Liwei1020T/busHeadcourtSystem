@@ -48,7 +48,7 @@ class VanInfo(BaseModel):
     """Schema for van information."""
     id: int
     van_code: str
-    bus_id: str
+    bus_id: Optional[str] = None
     plate_number: Optional[str] = None
     driver_name: Optional[str] = None
     capacity: Optional[int] = None
@@ -61,7 +61,7 @@ class VanInfo(BaseModel):
 class VanCreate(BaseModel):
     """Create/update payload for vans."""
     van_code: str
-    bus_id: str
+    bus_id: Optional[str] = None
     plate_number: Optional[str] = None
     driver_name: Optional[str] = None
     capacity: Optional[int] = None
@@ -73,7 +73,7 @@ class EmployeeInfo(BaseModel):
     id: int
     batch_id: int
     name: str
-    bus_id: str
+    bus_id: Optional[str] = None
     van_id: Optional[int] = None
     active: bool = True
 
@@ -103,7 +103,7 @@ class EmployeeCreate(BaseModel):
     """Create/update payload for employees."""
     batch_id: int
     name: str
-    bus_id: str
+    bus_id: Optional[str] = None
     van_id: Optional[int] = None
     active: bool = True
 
@@ -134,6 +134,7 @@ class AttendanceUploadResponse(BaseModel):
     attendance_inserted: int
     duplicates_ignored: int
     unknown_personids: int
+    offday_count: int = 0
     skipped_no_timein: int = 0
     skipped_missing_date: int = 0
     row_errors: List[UploadRowError] = []

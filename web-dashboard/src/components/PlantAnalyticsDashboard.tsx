@@ -106,6 +106,10 @@ export default function PlantAnalyticsDashboard({
 
   // Calculate display values based on mode
   // Use backend sums when available (precision), fallback to multiplication
+  // Note: All van passengers go to bus, so use totalPresent (bus + van) for passenger count
+  const displayTotalPresent = displayMode === 'total'
+    ? (totalPresentSum ?? totalPresent * numDays)
+    : totalPresent;
   const displayBusPresent = displayMode === 'total'
     ? (totalBusPresentSum ?? totalBusPresent * numDays)
     : totalBusPresent;
@@ -113,22 +117,23 @@ export default function PlantAnalyticsDashboard({
     ? (totalBusCapacitySum ?? totalBusCapacity * numDays)
     : totalBusCapacity;
   const displayEmptySeats = displayMode === 'total'
-    ? Math.max(0, displayBusCapacity - displayBusPresent)
-    : Math.max(0, totalBusCapacity - totalBusPresent);
+    ? Math.max(0, displayBusCapacity - displayTotalPresent)
+    : Math.max(0, totalBusCapacity - totalPresent);
 
   // Utilization is always a percentage (same for both modes)
-  const busUtilization = totalBusCapacity > 0 ? (totalBusPresent / totalBusCapacity) * 100 : 0;
+  // All passengers (bus + van) use bus capacity
+  const busUtilization = totalBusCapacity > 0 ? (totalPresent / totalBusCapacity) * 100 : 0;
   const emptyBusSeats = displayEmptySeats;
 
   const underutilizedBuses = plants.reduce((acc, p) =>
-    acc + p.buses.filter(b => b.bus_capacity > 0 && (b.bus_present / b.bus_capacity) * 100 < 30).length, 0
+    acc + p.buses.filter(b => b.bus_capacity > 0 && (b.total_present / b.bus_capacity) * 100 < 30).length, 0
   );
 
   // Quick stats calculations
   const totalBuses = plants.reduce((acc, p) => acc + p.buses.length, 0);
-  const displayAvgPassengersPerBus = totalBuses > 0 ? displayBusPresent / totalBuses : 0;
+  const displayAvgPassengersPerBus = totalBuses > 0 ? displayTotalPresent / totalBuses : 0;
   const lowUtilizationBuses = plants.reduce((acc, p) =>
-    acc + p.buses.filter(b => b.bus_capacity > 0 && (b.bus_present / b.bus_capacity) * 100 < 50).length, 0
+    acc + p.buses.filter(b => b.bus_capacity > 0 && (b.total_present / b.bus_capacity) * 100 < 50).length, 0
   );
 
   // Calculate changes vs previous period
@@ -284,7 +289,7 @@ export default function PlantAnalyticsDashboard({
         />
         <StatCard
           label={displayMode === 'total' ? `Passengers (${numDays} days)` : 'Passengers/Day'}
-          value={displayBusPresent.toLocaleString()}
+          value={displayTotalPresent.toLocaleString()}
           change={comparisonMode !== 'none' ? changes?.attendance : undefined}
           icon={Bus}
           valueColor="text-blue-600"

@@ -247,6 +247,25 @@ export async function uploadAttendance(file: File): Promise<AttendanceUploadResp
   return response.json();
 }
 
+export async function deleteAttendanceByDate(dateFrom: string, dateTo?: string): Promise<{ deleted_count: number; date_from: string; date_to: string }> {
+  const searchParams = new URLSearchParams();
+  searchParams.append('date_from', dateFrom);
+  if (dateTo) {
+    searchParams.append('date_to', dateTo);
+  }
+
+  const response = await fetch(`${API_BASE}/bus/attendance/delete-by-date?${searchParams}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Failed to delete attendance: ${response.status} ${detail}`.trim());
+  }
+
+  return response.json();
+}
+
 export async function fetchOccupancy(params: Partial<FilterParams>): Promise<OccupancyResponse> {
   const searchParams = new URLSearchParams();
   if (params.date_from) searchParams.append('date_from', params.date_from);

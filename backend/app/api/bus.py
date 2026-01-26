@@ -83,13 +83,23 @@ def _canonical_bus_id(value: str) -> Optional[str]:
     if "own" in text.lower():
         return "OWN"
 
-    match = re.search(r"route\s*[-:]?\s*([A-Za-z0-9]{1,4})", text, flags=re.IGNORECASE)
+    # Pattern 1: "Route C1_P1_AB" or "Route E12_BK_PPB" -> extract first part before underscore
+    match = re.search(r"route\s+([A-Za-z0-9]+)(?:_|\s|$)", text, flags=re.IGNORECASE)
+    if match:
+        bus_code = match.group(1).upper()
+        if 1 <= len(bus_code) <= 6:  # Allow up to 6 characters for codes like BKA04, BKD5
+            return bus_code
+
+    # Pattern 2: "Route-A07" or "Route: A07" -> extract after dash/colon
+    match = re.search(r"route\s*[-:]\s*([A-Za-z0-9]{1,6})", text, flags=re.IGNORECASE)
     if match:
         return match.group(1).upper()
 
+    # Pattern 3: Try to extract any 1-6 alphanumeric code
     cleaned = re.sub(r"[^A-Za-z0-9]", "", text).upper()
-    if 1 <= len(cleaned) <= 4:
+    if 1 <= len(cleaned) <= 6:
         return cleaned
+
     return None
 
 
@@ -160,9 +170,11 @@ def create_or_update_van(payload: VanCreate, db: Session = Depends(get_db)):
     Create or update a van for admin management.
     Uses van_code as the unique key.
     """
-    bus = db.query(Bus).filter(Bus.bus_id == payload.bus_id).first()
-    if not bus:
-        raise HTTPException(status_code=400, detail=f"Bus {payload.bus_id} not found")
+    bus = None
+    if payload.bus_id is not None:
+        bus = db.query(Bus).filter(Bus.bus_id == payload.bus_id).first()
+        if not bus:
+            raise HTTPException(status_code=400, detail=f"Bus {payload.bus_id} not found")
 
     van = db.query(Van).filter(Van.van_code == payload.van_code).first()
     if van:
@@ -240,17 +252,19 @@ def create_or_update_employee(payload: EmployeeCreate, db: Session = Depends(get
     """
     Create or update an employee record (batch_id based).
     """
-    # Validate bus
-    bus = db.query(Bus).filter(Bus.bus_id == payload.bus_id).first()
-    if not bus:
-        raise HTTPException(status_code=400, detail=f"Bus {payload.bus_id} not found")
+    # Validate bus if provided
+    bus = None
+    if payload.bus_id is not None:
+        bus = db.query(Bus).filter(Bus.bus_id == payload.bus_id).first()
+        if not bus:
+            raise HTTPException(status_code=400, detail=f"Bus {payload.bus_id} not found")
 
     van_obj: Optional[Van] = None
     if payload.van_id is not None:
         van_obj = db.query(Van).filter(Van.id == payload.van_id).first()
         if not van_obj:
             raise HTTPException(status_code=400, detail=f"Van {payload.van_id} not found")
-        if van_obj.bus_id != payload.bus_id:
+        if payload.bus_id is not None and van_obj.bus_id != payload.bus_id:
             raise HTTPException(status_code=400, detail="Van bus does not match employee bus")
 
     employee = db.query(Employee).filter(Employee.batch_id == payload.batch_id).first()
@@ -293,11 +307,11 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
     try:
         table = read_table_from_best_sheet(
             xlsx_bytes,
-            must_include={"personid", "name", "route", "transport"},
-            prefer_include={"route", "transport", "datejoined", "sapid", "status", "wdid"},
+            must_include={"name", "route", "transport"},
+            prefer_include={"personid", "sapid", "route", "transport", "datejoined", "status", "wdid"},
             sheet_name_exclude_prefixes=("note", "read", "instruction", "template"),
             min_prefer_matches=2,
-            required_non_empty_in_sample={"personid", "name"},
+            required_non_empty_in_sample={"name"},
             min_valid_sample_rows=1,
             sample_size=20,
         )
@@ -331,10 +345,14 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
     van_assignments: dict[str, str] = {}
 
     for row in rows:
-        personid = coerce_int(_row_value(row.values, "personid"))
+        personid = coerce_int(_row_value(row.values, "personid", "person_id", "batchid", "batch_id", "employeeid", "employee_id"))
         name = coerce_str(_row_value(row.values, "name"))
         date_joined = coerce_date(_row_value(row.values, "datejoined"))
         sap_id = coerce_str(_row_value(row.values, "sapid"))
+
+        # Fallback: if no personid, try to use sap_id (for passport holders)
+        if not personid:
+            personid = coerce_int(sap_id)
         status_text = coerce_str(_row_value(row.values, "status"))
         wdid = coerce_str(_row_value(row.values, "wdid"))
         transport_contractor = coerce_str(_row_value(row.values, "transportcontractor"))
@@ -350,16 +368,17 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
         route_value = coerce_str(_row_value(row.values, "route"))
         building_id = coerce_str(_row_value(row.values, "buildingid"))
         nationality = coerce_str(_row_value(row.values, "nationality"))
+        day_type = coerce_str(_row_value(row.values, "daytype", "day_type"))
 
         bus_id = _canonical_bus_id(route_value or "") if route_value else None
         if not bus_id and transport and "own" in transport.lower():
             bus_id = "OWN"
         if not bus_id:
-            bus_id = "UNKN"
+            # Keep bus_id as None instead of assigning to UNKN
             unassigned_rows += 1
 
         van_code = _canonical_van_code(transport) if transport else None
-        if bus_id == "UNKN":
+        if bus_id is None:
             van_code = None
         if van_code and van_code == bus_id:
             van_code = None
@@ -377,15 +396,16 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
         if personid:
             personids.add(int(personid))
 
-        bus_ids.add(bus_id)
-        if bus_id not in bus_routes and route_value:
-            bus_routes[bus_id] = route_value.strip()
+        if bus_id:
+            bus_ids.add(bus_id)
+            if bus_id not in bus_routes and route_value:
+                bus_routes[bus_id] = route_value.strip()
         if van_code:
             van_codes.add(van_code)
             existing_bus = van_assignments.get(van_code)
-            if existing_bus is None or existing_bus == "UNKN":
+            if existing_bus is None:
                 van_assignments[van_code] = bus_id
-            elif bus_id != "UNKN" and existing_bus != bus_id:
+            elif bus_id and existing_bus != bus_id:
                 van_assignments[van_code] = bus_id
 
         master_base = {
@@ -514,7 +534,7 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
     for vcode in van_code_list:
         if vcode in vans_by_code:
             continue
-        assigned_bus_id = van_assignments.get(vcode) or "UNKN"
+        assigned_bus_id = van_assignments.get(vcode)
         bus = buses_by_id.get(assigned_bus_id)
         van_obj = Van(van_code=vcode, bus_id=assigned_bus_id, plate_number=None, driver_name=None, capacity=12, active=True)
         if bus:
@@ -598,31 +618,30 @@ def upload_master_list(file: UploadFile = File(...), db: Session = Depends(get_d
         personid = int(item["personid"])
 
         bus_id = item["bus_id"]
-        if not bus_id:
-            continue
-
-        bus = buses_by_id.get(bus_id)
-        if not bus:
-            bus = Bus(
-                bus_id=bus_id,
-                route=("Unassigned" if bus_id == "UNKN" else (item["route_value"] or f"Route-{bus_id}").strip()),
-                plate_number=None,
-                capacity=None if bus_id in {"OWN", "UNKN"} else 40,
-            )
-            db.add(bus)
-            buses_by_id[bus_id] = bus
-            buses_upserted += 1
-            touched_buses.add(bus_id)
-        else:
-            route_value = item["route_value"]
-            if bus_id not in touched_buses and route_value and bus.route != route_value.strip():
-                bus.route = route_value.strip()
+        bus = None
+        if bus_id:
+            bus = buses_by_id.get(bus_id)
+            if not bus:
+                bus = Bus(
+                    bus_id=bus_id,
+                    route=("Unassigned" if bus_id == "UNKN" else (item["route_value"] or f"Route-{bus_id}").strip()),
+                    plate_number=None,
+                    capacity=None if bus_id in {"OWN", "UNKN"} else 40,
+                )
+                db.add(bus)
+                buses_by_id[bus_id] = bus
                 buses_upserted += 1
                 touched_buses.add(bus_id)
+            else:
+                route_value = item["route_value"]
+                if bus_id not in touched_buses and route_value and bus.route != route_value.strip():
+                    bus.route = route_value.strip()
+                    buses_upserted += 1
+                    touched_buses.add(bus_id)
 
         van_obj: Optional[Van] = None
         van_code = item["van_code"]
-        if van_code:
+        if van_code and bus_id:
             van_obj = vans_by_code.get(van_code)
             if not van_obj:
                 van_obj = Van(van_code=van_code, bus_id=bus_id, plate_number=None, driver_name=None, capacity=12, active=True)
@@ -707,6 +726,8 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
                 "timein",
                 "timeout",
                 "shift",
+                "daytype",
+                "day_type",
             },
             sheet_name_exclude_prefixes=("note", "read", "instruction", "template"),
             min_prefer_matches=1,
@@ -727,6 +748,7 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
     attendance_inserted = 0
     duplicates_ignored = 0
     unknown_personids = 0
+    offday_count = 0
     skipped_no_timein = 0
     skipped_missing_date = 0
 
@@ -757,20 +779,34 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
             skipped_missing_date += 1
             continue
 
+        # Read DayType to determine if employee should be working
+        day_type = coerce_str(_row_value(row.values, "daytype", "day_type"))
+
+        # Skip if DayType is "Offday" - employee is not expected to work
+        if day_type and day_type.lower() == "offday":
+            continue
+
         # For workforce exports, treat rows with TimeIn as present; Offday/absence rows typically have no TimeIn.
         time_in = coerce_time(_row_value(row.values, "timein"))
-        if time_in is None:
-            skipped_no_timein += 1
-            continue
 
         shift_value: AttendanceShift = shift_override or AttendanceShift.unknown
         scanned_at: datetime
-        if shift_override is None:
-            local_dt = datetime.combine(scanned_on, time_in).replace(tzinfo=LOCAL_TZ)
-            shift_value = derive_shift(local_dt)
-            scanned_at = local_dt
+        is_offday = time_in is None
+
+        if time_in is not None:
+            # Has TimeIn - determine shift from time
+            if shift_override is None:
+                local_dt = datetime.combine(scanned_on, time_in).replace(tzinfo=LOCAL_TZ)
+                shift_value = derive_shift(local_dt)
+                scanned_at = local_dt
+            else:
+                scanned_at = datetime.combine(scanned_on, time_in).replace(tzinfo=LOCAL_TZ)
         else:
-            scanned_at = datetime.combine(scanned_on, time_in).replace(tzinfo=LOCAL_TZ)
+            # No TimeIn - offday/absent, use default time
+            if shift_override is not None:
+                shift_value = shift_override
+            # Use a default time for offday records
+            scanned_at = datetime.combine(scanned_on, time(0, 0)).replace(tzinfo=LOCAL_TZ)
 
         parsed_rows.append(
             {
@@ -780,6 +816,7 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
                 "scanned_on": scanned_on,
                 "shift": shift_value,
                 "scanned_at": scanned_at,
+                "is_offday": is_offday,
             }
         )
         personids.add(int(personid))
@@ -793,6 +830,7 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
             for emp in db.query(Employee).filter(Employee.batch_id.in_(chunk)).all():
                 employees_by_personid[int(emp.batch_id)] = emp
 
+    # Track existing records in database and within this upload file
     existing_keys: set[tuple[int, object, AttendanceShift]] = set()
     if personid_list and scanned_dates and shifts:
         for chunk in _chunked(personid_list):
@@ -816,19 +854,23 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
             continue
 
         employee = employees_by_personid.get(personid)
+
+        # Skip if employee not found - no unknown_batch records
+        if not employee:
+            unknown_personids += 1
+            continue
+
         status_value: str
         employee_id: Optional[int] = None
         bus_id: Optional[str] = None
         van_id: Optional[int] = None
+        is_offday = item.get("is_offday", False)
 
-        if employee:
-            employee_id = employee.id
-            bus_id = employee.bus_id
-            van_id = employee.van_id
-            status_value = "present"
-        else:
-            status_value = "unknown_batch"
-            unknown_personids += 1
+        employee_id = employee.id
+        bus_id = employee.bus_id
+        van_id = employee.van_id
+        # Set status based on whether it's offday
+        status_value = "offday" if is_offday else "present"
 
         raw_date = item["raw_date"]
         scanned_at = item.get("scanned_at")
@@ -851,6 +893,8 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
         )
         db.add(attendance)
         attendance_inserted += 1
+        if is_offday:
+            offday_count += 1
         existing_keys.add(key)
 
     db.commit()
@@ -862,10 +906,55 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
         attendance_inserted=attendance_inserted,
         duplicates_ignored=duplicates_ignored,
         unknown_personids=unknown_personids,
+        offday_count=offday_count,
         skipped_no_timein=skipped_no_timein,
         skipped_missing_date=skipped_missing_date,
         row_errors=row_errors,
     )
+
+
+@router.delete("/attendance/delete-by-date")
+def delete_attendance_by_date(
+    date_from: str,
+    date_to: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete attendance records for a specific date range.
+
+    - date_from: Start date (inclusive) in YYYY-MM-DD format
+    - date_to: End date (inclusive) in YYYY-MM-DD format. If not provided, only date_from is deleted.
+    """
+    from datetime import date as date_type
+
+    try:
+        start_date = date_type.fromisoformat(date_from)
+        end_date = date_type.fromisoformat(date_to) if date_to else start_date
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    if end_date < start_date:
+        raise HTTPException(status_code=400, detail="End date must be after or equal to start date")
+
+    # Count records to be deleted
+    count = db.query(Attendance).filter(
+        Attendance.scanned_on >= start_date,
+        Attendance.scanned_on <= end_date
+    ).count()
+
+    # Delete records
+    db.query(Attendance).filter(
+        Attendance.scanned_on >= start_date,
+        Attendance.scanned_on <= end_date
+    ).delete(synchronize_session=False)
+
+    db.commit()
+
+    return {
+        "deleted_count": count,
+        "date_from": date_from,
+        "date_to": date_to or date_from
+    }
 
 
 @router.post("/upload-scans", response_model=UploadScansResponse)
@@ -912,18 +1001,21 @@ def upload_scans(
 
             employee = employees_by_personid.get(int(scan.batch_id))
 
+            # Skip if employee not found - no unknown_batch records
+            if not employee:
+                logger.warning(f"Skipping scan for unknown batch_id: {scan.batch_id}")
+                success_ids.append(scan.id)
+                continue
+
             status: str
             bus_id: Optional[str] = None
             van_id: Optional[int] = None
             employee_id: Optional[int] = None
 
-            if employee:
-                employee_id = employee.id
-                bus_id = employee.bus_id
-                van_id = employee.van_id
-                status = "present" if shift != AttendanceShift.unknown else "unknown_shift"
-            else:
-                status = "unknown_shift" if shift == AttendanceShift.unknown else "unknown_batch"
+            employee_id = employee.id
+            bus_id = employee.bus_id
+            van_id = employee.van_id
+            status = "present" if shift != AttendanceShift.unknown else "unknown_shift"
 
             # Prevent duplicate per batch/date/shift
             exists = db.query(Attendance.id).filter(

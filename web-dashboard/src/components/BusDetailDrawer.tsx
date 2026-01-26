@@ -145,7 +145,7 @@ export default function BusDetailDrawer({ busId, filters, onClose }: BusDetailDr
                <div className="text-xl font-bold text-red-700">{data.absent_total}</div>
              </div>
              <div className="bg-gray-50 p-2 rounded border border-gray-100 text-center">
-               <div className="text-xs text-gray-500 uppercase font-semibold">Roster</div>
+               <div className="text-xs text-gray-500 uppercase font-semibold">Total</div>
                <div className="text-xl font-bold text-gray-700">{data.roster_total}</div>
              </div>
           </div>
