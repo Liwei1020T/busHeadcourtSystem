@@ -63,7 +63,7 @@ export default function PlantDrilldownModal({ plant, onClose }: PlantDrilldownMo
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-800">
-                {plant.totalBusPresent}/{plant.totalBusCapacity}
+                {plant.totalPresent}/{plant.totalBusCapacity}
               </div>
               <div className="text-xs text-slate-500">Present/Capacity</div>
             </div>

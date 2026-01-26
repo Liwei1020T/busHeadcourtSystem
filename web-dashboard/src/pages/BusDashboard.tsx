@@ -104,7 +104,7 @@ export default function BusDashboard() {
 
     let critical = 0, warning = 0, normal = 0;
     occupancy.rows.forEach((row) => {
-      const util = row.bus_capacity > 0 ? (row.bus_present / row.bus_capacity) * 100 : 0;
+      const util = row.bus_capacity > 0 ? (row.total_present / row.bus_capacity) * 100 : 0;
       const level = getSeverityLevel(util);
       if (level === 'critical') critical++;
       else if (level === 'warning') warning++;
@@ -138,7 +138,7 @@ export default function BusDashboard() {
         if (!matchesBus && !matchesRoute) return false;
       }
 
-      const util = row.bus_capacity > 0 ? (row.bus_present / row.bus_capacity) * 100 : 0;
+      const util = row.bus_capacity > 0 ? (row.total_present / row.bus_capacity) * 100 : 0;
       const absentPct = row.total_roster > 0 ? ((row.total_roster - row.total_present) / row.total_roster) * 100 : 0;
       const severity = getSeverityLevel(util);
 

@@ -80,8 +80,8 @@ export function groupByPlant(buses: OccupancyBusRow[]): PlantGroup[] {
     let totalRoster = 0;
 
     plantBuses.forEach((bus) => {
-      // Calculate utilization based on bus_capacity only
-      const util = bus.bus_capacity > 0 ? (bus.bus_present / bus.bus_capacity) * 100 : 0;
+      // Calculate utilization based on bus_capacity only, using total_present (bus + van passengers)
+      const util = bus.bus_capacity > 0 ? (bus.total_present / bus.bus_capacity) * 100 : 0;
       const severity = getSeverityLevel(util);
 
       if (severity === 'critical') criticalCount++;
@@ -98,8 +98,8 @@ export function groupByPlant(buses: OccupancyBusRow[]): PlantGroup[] {
 
     // Sort buses within plant by severity (critical first)
     const sortedBuses = [...plantBuses].sort((a, b) => {
-      const utilA = a.bus_capacity > 0 ? (a.bus_present / a.bus_capacity) * 100 : 0;
-      const utilB = b.bus_capacity > 0 ? (b.bus_present / b.bus_capacity) * 100 : 0;
+      const utilA = a.bus_capacity > 0 ? (a.total_present / a.bus_capacity) * 100 : 0;
+      const utilB = b.bus_capacity > 0 ? (b.total_present / b.bus_capacity) * 100 : 0;
       const sevA = getSeverityLevel(utilA);
       const sevB = getSeverityLevel(utilB);
 
@@ -119,7 +119,7 @@ export function groupByPlant(buses: OccupancyBusRow[]): PlantGroup[] {
       totalVanPresent,
       totalPresent,
       totalRoster,
-      avgUtilization: totalBusCapacity > 0 ? (totalBusPresent / totalBusCapacity) * 100 : 0,
+      avgUtilization: totalBusCapacity > 0 ? (totalPresent / totalBusCapacity) * 100 : 0,
       avgAttendanceRate: totalRoster > 0 ? (totalPresent / totalRoster) * 100 : 0,
       criticalCount,
       warningCount,
