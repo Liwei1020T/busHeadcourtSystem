@@ -19,7 +19,7 @@ type FlatItem =
   | { type: 'ROW'; bus: OccupancyBusRow; plantId: string };
 
 // Row heights
-const HEADER_HEIGHT = 64;
+const HEADER_HEIGHT = 56;
 const TABLE_HEADER_HEIGHT = 36;
 const ROW_HEIGHT = 64; // Increased to accommodate the progress bar
 
@@ -96,18 +96,18 @@ function PlantHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-6 text-sm">
-        <div className="flex flex-col items-end min-w-[90px]">
-          <span className="font-bold text-base font-mono">{plant.avgUtilization.toFixed(1)}%</span>
-          <span className="text-xs text-slate-500 whitespace-nowrap">Utilization</span>
+      <div className="flex items-center gap-8 text-sm flex-shrink-0">
+        <div className="text-right w-24">
+          <span className="font-bold font-mono">{plant.avgUtilization.toFixed(1)}%</span>
+          <span className="text-slate-400 ml-1 text-xs">Util</span>
         </div>
-        <div className="flex flex-col items-end min-w-[90px]">
-          <span className="font-bold text-base font-mono">{plant.avgAttendanceRate.toFixed(1)}%</span>
-          <span className="text-xs text-slate-500 whitespace-nowrap">Attendance</span>
+        <div className="text-right w-24">
+          <span className="font-bold font-mono">{plant.avgAttendanceRate.toFixed(1)}%</span>
+          <span className="text-slate-400 ml-1 text-xs">Attend</span>
         </div>
-        <div className="flex flex-col items-end min-w-[90px]">
-          <span className="font-bold text-base font-mono text-blue-600">{plant.totalPresent.toLocaleString()}</span>
-          <span className="text-xs text-slate-500 whitespace-nowrap">Passengers</span>
+        <div className="text-right w-24">
+          <span className="font-bold font-mono text-blue-600">{plant.totalPresent.toLocaleString()}</span>
+          <span className="text-slate-400 ml-1 text-xs">pax</span>
         </div>
       </div>
     </button>
