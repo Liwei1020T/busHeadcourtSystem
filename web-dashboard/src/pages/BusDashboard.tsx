@@ -199,17 +199,40 @@ export default function BusDashboard() {
   // Use backend num_days if available, otherwise fallback
   const numDays = occupancy?.num_days ?? calculatedNumDays;
 
-  // Totals (prefer raw sums from backend for accuracy)
-  const totalBusPresent = occupancy?.total_bus_present ?? 0; // Average
-  const totalBusCapacity = occupancy?.total_bus_capacity ?? 0; // Average
-  const totalPresent = occupancy?.total_present ?? 0; // Average
-  const totalRoster = occupancy?.total_roster ?? 0; // Average
+  // Calculate totals from filtered plants (to match displayed data)
+  const filteredTotals = useMemo(() => {
+    const totals = {
+      busPresent: 0,
+      busCapacity: 0,
+      vanPresent: 0,
+      vanCapacity: 0,
+      present: 0,
+      roster: 0,
+    };
 
-  const totalBusPresentSum = occupancy?.total_bus_present_sum ?? (totalBusPresent * numDays);
-  const totalBusCapacitySum = (occupancy?.total_bus_capacity ?? 0) * numDays; // Capacity sums not returned yet, calculate
-  const totalPresentSum = occupancy?.total_present_sum ?? (totalPresent * numDays);
+    plants.forEach(plant => {
+      totals.busPresent += plant.totalBusPresent;
+      totals.busCapacity += plant.totalBusCapacity;
+      totals.vanPresent += plant.totalVanPresent;
+      totals.vanCapacity += plant.totalVanCapacity;
+      totals.present += plant.totalPresent;
+      totals.roster += plant.totalRoster;
+    });
 
-  const busUtilization = totalBusCapacity > 0 ? (totalBusPresent / totalBusCapacity) * 100 : 0;
+    return totals;
+  }, [plants]);
+
+  // Use filtered totals for display (consistent with what user sees)
+  const totalBusPresent = filteredTotals.busPresent;
+  const totalBusCapacity = filteredTotals.busCapacity;
+  const totalPresent = filteredTotals.present;
+  const totalRoster = filteredTotals.roster;
+
+  const totalBusPresentSum = totalBusPresent * numDays;
+  const totalBusCapacitySum = totalBusCapacity * numDays;
+  const totalPresentSum = totalPresent * numDays;
+
+  const busUtilization = totalBusCapacity > 0 ? (totalPresent / totalBusCapacity) * 100 : 0;
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -238,7 +261,7 @@ export default function BusDashboard() {
       <div className="flex flex-1 overflow-hidden">
         {mode === 'live' && (
           <Sidebar
-            busPresent={totalBusPresent}
+            busPresent={totalPresent}
             busUtilization={busUtilization}
             busCapacity={totalBusCapacity}
             criticalCount={severityCounts.critical}
