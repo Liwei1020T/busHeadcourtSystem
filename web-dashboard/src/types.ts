@@ -138,6 +138,7 @@ export type AttendanceUploadResponse = {
   attendance_inserted: number;
   duplicates_ignored: number;
   unknown_personids: number;
+  unknown_attendance_inserted?: number;  // Unknown PersonIds saved to tracking table
   offday_count?: number;
   skipped_no_timein?: number;
   skipped_missing_date?: number;

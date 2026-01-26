@@ -1,6 +1,6 @@
 // web-dashboard/src/utils/weeklyAggregation.ts
 
-import { startOfWeek, endOfWeek, format, parseISO, isSameWeek } from 'date-fns';
+import { startOfWeek, format, parseISO } from 'date-fns';
 import { TrendDataPoint } from '../types';
 
 export type WeeklyDataPoint = {
@@ -39,9 +39,6 @@ export function aggregateToWeekly(daily: TrendDataPoint[]): TrendDataPoint[] {
     .map(([weekStartStr, points]) => {
       const totalRoster = points.reduce((sum, p) => sum + p.roster, 0);
       const totalPresent = points.reduce((sum, p) => sum + p.present, 0);
-
-      const weekStart = parseISO(weekStartStr);
-      const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
 
       // Calculate daily averages
       const avgRoster = Math.round(totalRoster / points.length);

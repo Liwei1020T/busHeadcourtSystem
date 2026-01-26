@@ -94,7 +94,6 @@ export default function PlantAnalyticsDashboard({
   dateFrom = '',
   dateTo = '',
   numDays = 1,
-  totalBusPresentSum,
   totalBusCapacitySum,
   totalPresentSum,
   prevPeriodData,
@@ -110,9 +109,6 @@ export default function PlantAnalyticsDashboard({
   const displayTotalPresent = displayMode === 'total'
     ? (totalPresentSum ?? totalPresent * numDays)
     : totalPresent;
-  const displayBusPresent = displayMode === 'total'
-    ? (totalBusPresentSum ?? totalBusPresent * numDays)
-    : totalBusPresent;
   const displayBusCapacity = displayMode === 'total'
     ? (totalBusCapacitySum ?? totalBusCapacity * numDays)
     : totalBusCapacity;

@@ -13,11 +13,13 @@ SET TIME ZONE 'Asia/Kuala_Lumpur';
 -- ------------------------------------------------------------
 -- Clean existing objects for repeatable runs (drops data)
 -- ------------------------------------------------------------
+DROP TABLE IF EXISTS unknown_attendances CASCADE;
 DROP TABLE IF EXISTS attendances CASCADE;
 DROP TABLE IF EXISTS employee_master CASCADE;
 DROP TABLE IF EXISTS employees CASCADE;
 DROP TABLE IF EXISTS vans CASCADE;
 DROP TABLE IF EXISTS buses CASCADE;
+DROP TYPE IF EXISTS unknown_attendance_shift;
 DROP TYPE IF EXISTS attendance_shift;
 
 -- ------------------------------------------------------------
@@ -131,6 +133,31 @@ CREATE TABLE attendances (
 CREATE UNIQUE INDEX uq_attendance_batch_date_shift ON attendances (scanned_batch_id, scanned_on, shift);
 CREATE INDEX idx_attendances_bus_shift_date ON attendances (bus_id, shift, scanned_on);
 CREATE INDEX idx_attendances_scanned_on ON attendances (scanned_on);
+
+-- ------------------------------------------------------------
+-- Enum: unknown_attendance_shift (same values as attendance_shift)
+-- ------------------------------------------------------------
+CREATE TYPE unknown_attendance_shift AS ENUM ('morning', 'night', 'unknown');
+
+-- ------------------------------------------------------------
+-- Table: unknown_attendances
+-- Tracks attendance records where PersonId is NOT found in master list.
+-- This allows tracking routes that appear in attendance but not in master list.
+-- ------------------------------------------------------------
+CREATE TABLE unknown_attendances (
+    id               BIGSERIAL PRIMARY KEY,
+    scanned_batch_id BIGINT NOT NULL CHECK (scanned_batch_id > 0),
+    route_raw        VARCHAR(200),
+    bus_id           VARCHAR(10),
+    shift            unknown_attendance_shift NOT NULL DEFAULT 'unknown',
+    scanned_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    scanned_on       DATE NOT NULL DEFAULT ((CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Kuala_Lumpur')::date),
+    source           VARCHAR(50)
+);
+
+CREATE UNIQUE INDEX uq_unknown_attendance_batch_date_shift ON unknown_attendances (scanned_batch_id, scanned_on, shift);
+CREATE INDEX idx_unknown_attendances_bus_id ON unknown_attendances (bus_id);
+CREATE INDEX idx_unknown_attendances_scanned_on ON unknown_attendances (scanned_on);
 
 -- ------------------------------------------------------------
 -- Minimal seed (optional)

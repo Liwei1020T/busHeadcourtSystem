@@ -1,7 +1,7 @@
 // web-dashboard/src/components/TrendAnalysisView.tsx
 
 import { useEffect, useState, useMemo } from 'react';
-import { format, subDays, startOfMonth, endOfMonth, subMonths, addDays } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Loader2, TrendingUp, TrendingDown, Users, UserCheck, Download, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ export default function TrendAnalysisView({ filters, onFilterChange }: TrendAnal
   const [trendData, setTrendData] = useState<TrendAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [breakdown, setBreakdown] = useState<TrendBreakdown>('none');
+  const [_breakdown, _setBreakdown] = useState<TrendBreakdown>('none');
   const [view, setView] = useState<TrendView>('daily');
   const [showComparison, setShowComparison] = useState(true);
 
@@ -341,7 +341,7 @@ export default function TrendAnalysisView({ filters, onFilterChange }: TrendAnal
 
           {/* Main Chart */}
           <AttendanceRateTrendChart
-            data={displayData}
+            data={displayData || []}
             previousData={displayPreviousData}
             showComparison={showComparison && !!displayPreviousData}
             viewMode={view}

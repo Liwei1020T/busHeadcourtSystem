@@ -241,8 +241,16 @@ export default function Uploads() {
                 <div>
                   <div className="font-semibold">Upload complete</div>
                   <div className="text-emerald-700">
-                    Rows: {attendanceResult.processed_rows} · Inserted: {attendanceResult.attendance_inserted} · Duplicates: {attendanceResult.duplicates_ignored} · Unknown: {attendanceResult.unknown_personids}
+                    Rows: {attendanceResult.processed_rows} · Inserted: {attendanceResult.attendance_inserted} · Duplicates: {attendanceResult.duplicates_ignored}
                   </div>
+                  {attendanceResult.unknown_personids > 0 && (
+                    <div className="text-amber-700">
+                      Unknown PersonIds: {attendanceResult.unknown_personids}
+                      {(attendanceResult.unknown_attendance_inserted ?? 0) > 0 && (
+                        <span> ({attendanceResult.unknown_attendance_inserted} saved for tracking)</span>
+                      )}
+                    </div>
+                  )}
                   {attendanceResult.offday_count ? (
                     <div className="text-emerald-700">
                       Offdays recorded: {attendanceResult.offday_count}

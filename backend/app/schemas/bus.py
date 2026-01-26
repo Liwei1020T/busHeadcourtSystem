@@ -134,6 +134,7 @@ class AttendanceUploadResponse(BaseModel):
     attendance_inserted: int
     duplicates_ignored: int
     unknown_personids: int
+    unknown_attendance_inserted: int = 0  # New: unknown PersonIds saved to unknown_attendances table
     offday_count: int = 0
     skipped_no_timein: int = 0
     skipped_missing_date: int = 0

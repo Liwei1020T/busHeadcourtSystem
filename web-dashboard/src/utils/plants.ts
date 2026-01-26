@@ -22,33 +22,25 @@ export type PlantGroup = {
 /**
  * Extract plant from building_id or route name.
  * Normalizes to P1, P2, BK, or Unknown.
+ *
+ * IMPORTANT: If building_id is null/undefined/"UNKNOWN", always return 'Unknown'
+ * This indicates the bus is not in master list (from unknown_attendances).
  */
-export function extractPlant(buildingId?: string | null, route?: string | null): string {
-  // 1. Try building_id first if it exists and is not Unknown
-  if (buildingId) {
-    const upper = buildingId.toUpperCase().trim();
-    if (upper === 'P1') return 'P1';
-    if (upper === 'P2') return 'P2';
-    if (upper.startsWith('BK')) return 'BK';
-    if (upper !== 'UNKNOWN') return upper;
+export function extractPlant(buildingId?: string | null, _route?: string | null): string {
+  // 1. If building_id is null/undefined or "UNKNOWN", it's an unknown bus (not in master list)
+  if (!buildingId || buildingId.toUpperCase() === 'UNKNOWN') {
+    return 'Unknown';
   }
 
-  // 2. Fallback to route parsing
-  if (route) {
-    const upperRoute = route.toUpperCase();
-    // Check for explicit patterns first (surrounded by separators)
-    if (upperRoute.includes('_P1_') || upperRoute.includes('-P1-') || upperRoute.includes(' P1 ')) return 'P1';
-    if (upperRoute.includes('_P2_') || upperRoute.includes('-P2-') || upperRoute.includes(' P2 ')) return 'P2';
-    if (upperRoute.includes('_BK_') || upperRoute.includes('-BK-') || upperRoute.includes(' BK ')) return 'BK';
+  // 2. Check building_id for known plants
+  const upper = buildingId.toUpperCase().trim();
+  if (upper === 'P1') return 'P1';
+  if (upper === 'P2') return 'P2';
+  if (upper.startsWith('BK')) return 'BK';
+  if (upper === 'JBMW') return 'JBMW';
 
-    // Check for loosely connected patterns if strict ones fail
-    // Example: "Route P1" or "P1 Bus"
-    if (upperRoute.includes('P1')) return 'P1';
-    if (upperRoute.includes('P2')) return 'P2';
-    if (upperRoute.includes('BK')) return 'BK';
-  }
-
-  return 'Unknown';
+  // 3. If building_id is something else (not null, not UNKNOWN), use it as-is
+  return upper;
 }
 
 /**

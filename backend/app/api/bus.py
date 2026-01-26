@@ -18,7 +18,7 @@ from sqlalchemy import and_
 from app.core.db import get_db
 from app.core.excel import build_scanned_at, coerce_date, coerce_int, coerce_str, coerce_time, read_table_from_best_sheet
 from app.core.security import validate_api_key
-from app.models import Bus, Employee, EmployeeMaster, Attendance, AttendanceShift, Van
+from app.models import Bus, Employee, EmployeeMaster, Attendance, AttendanceShift, Van, UnknownAttendance, UnknownAttendanceShift
 from app.schemas.bus import (
     UploadScansRequest,
     UploadScansResponse,
@@ -728,6 +728,7 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
                 "shift",
                 "daytype",
                 "day_type",
+                "route",  # Added to capture route for unknown tracking
             },
             sheet_name_exclude_prefixes=("note", "read", "instruction", "template"),
             min_prefer_matches=1,
@@ -789,6 +790,9 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
         # For workforce exports, treat rows with TimeIn as present; Offday/absence rows typically have no TimeIn.
         time_in = coerce_time(_row_value(row.values, "timein"))
 
+        # Capture route from attendance row (for unknown PersonId tracking)
+        route_raw = coerce_str(_row_value(row.values, "route"))
+
         shift_value: AttendanceShift = shift_override or AttendanceShift.unknown
         scanned_at: datetime
         is_offday = time_in is None
@@ -817,6 +821,7 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
                 "shift": shift_value,
                 "scanned_at": scanned_at,
                 "is_offday": is_offday,
+                "route_raw": route_raw,  # Track route for unknown PersonId handling
             }
         )
         personids.add(int(personid))
@@ -843,6 +848,21 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
             ):
                 existing_keys.add((int(scanned_batch_id), scanned_on, shift_val))
 
+    # Also check for existing unknown attendance records to avoid duplicates
+    existing_unknown_keys: set[tuple[int, object, AttendanceShift]] = set()
+    if personid_list and scanned_dates and shifts:
+        for chunk in _chunked(personid_list):
+            for scanned_batch_id, scanned_on, shift_val in (
+                db.query(UnknownAttendance.scanned_batch_id, UnknownAttendance.scanned_on, UnknownAttendance.shift)
+                .filter(UnknownAttendance.scanned_batch_id.in_(chunk))
+                .filter(UnknownAttendance.scanned_on.in_(list(scanned_dates)))
+                .filter(UnknownAttendance.shift.in_(list(shifts)))
+                .all()
+            ):
+                existing_unknown_keys.add((int(scanned_batch_id), scanned_on, shift_val))
+
+    unknown_attendance_inserted = 0
+
     for item in parsed_rows:
         personid = item["personid"]
         scanned_on = item["scanned_on"]
@@ -855,9 +875,36 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
 
         employee = employees_by_personid.get(personid)
 
-        # Skip if employee not found - no unknown_batch records
+        # Handle unknown PersonId - save to unknown_attendances table
         if not employee:
             unknown_personids += 1
+            # Check if already exists in unknown_attendances
+            if key in existing_unknown_keys:
+                continue
+            # Save to unknown_attendances table with route info
+            route_raw = item.get("route_raw")
+            bus_id_from_route = _canonical_bus_id(route_raw) if route_raw else None
+
+            raw_date = item["raw_date"]
+            scanned_at = item.get("scanned_at")
+            if scanned_at is None:
+                if isinstance(raw_date, datetime):
+                    scanned_at = raw_date.replace(tzinfo=LOCAL_TZ) if raw_date.tzinfo is None else raw_date.astimezone(LOCAL_TZ)
+                else:
+                    scanned_at = build_scanned_at(scanned_on, shift_value.value).replace(tzinfo=LOCAL_TZ)
+
+            unknown_attendance = UnknownAttendance(
+                scanned_batch_id=personid,
+                route_raw=route_raw,
+                bus_id=bus_id_from_route,
+                shift=UnknownAttendanceShift(shift_value.value),
+                scanned_at=scanned_at,
+                scanned_on=scanned_on,
+                source="manual_upload",
+            )
+            db.add(unknown_attendance)
+            unknown_attendance_inserted += 1
+            existing_unknown_keys.add(key)
             continue
 
         status_value: str
@@ -906,6 +953,7 @@ def upload_attendance(file: UploadFile = File(...), shift: Optional[str] = None,
         attendance_inserted=attendance_inserted,
         duplicates_ignored=duplicates_ignored,
         unknown_personids=unknown_personids,
+        unknown_attendance_inserted=unknown_attendance_inserted,
         offday_count=offday_count,
         skipped_no_timein=skipped_no_timein,
         skipped_missing_date=skipped_missing_date,

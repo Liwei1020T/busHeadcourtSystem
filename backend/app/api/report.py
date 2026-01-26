@@ -16,7 +16,7 @@ from sqlalchemy import func, case, or_
 
 from app.core.db import get_db
 from app.core.cache import ttl_cache
-from app.models import Attendance, AttendanceShift, Bus, Employee, EmployeeMaster, Van
+from app.models import Attendance, AttendanceShift, Bus, Employee, EmployeeMaster, Van, UnknownAttendance
 from app.schemas.report import (
     HeadcountRow,
     HeadcountResponse,
@@ -461,6 +461,65 @@ def occupancy(
         if r[0]
     }
 
+    # Query unknown_attendances for routes not in master list
+    unknown_query = db.query(
+        UnknownAttendance.bus_id,
+        UnknownAttendance.route_raw,
+        func.count(UnknownAttendance.id).label("total_present"),
+    ).filter(
+        UnknownAttendance.bus_id.is_not(None),
+        UnknownAttendance.bus_id != 'OWN'
+    )
+
+    if target_date:
+        unknown_query = unknown_query.filter(UnknownAttendance.scanned_on == target_date)
+    else:
+        if target_from:
+            unknown_query = unknown_query.filter(UnknownAttendance.scanned_on >= target_from)
+        if target_to:
+            unknown_query = unknown_query.filter(UnknownAttendance.scanned_on <= target_to)
+    if target_shifts:
+        unknown_query = unknown_query.filter(UnknownAttendance.shift.in_(target_shifts))
+    if bus_ids:
+        unknown_query = unknown_query.filter(UnknownAttendance.bus_id.in_(bus_ids))
+    elif allowed_bus_ids is not None:
+        unknown_query = unknown_query.filter(UnknownAttendance.bus_id.in_(allowed_bus_ids))
+
+    unknown_query = unknown_query.group_by(UnknownAttendance.bus_id, UnknownAttendance.route_raw)
+    unknown_rows = unknown_query.all()
+
+    # Add unknown attendance to attendance_by_bus and bus_meta
+    for bid, route_raw, total_present_count in unknown_rows:
+        if bid:
+            avg_present = round(int(total_present_count or 0) / num_days)
+
+            # Only mark as UNKNOWN if bus_id is NOT in buses table
+            if bid not in bus_meta:
+                # This bus_id doesn't exist in buses table - it's truly unknown
+                bus_meta[bid] = {
+                    "route": route_raw or f"Route {bid}",
+                    "bus_capacity": 40  # Default capacity for unknown buses
+                }
+                # Set building_id to "UNKNOWN" so frontend can identify it
+                building_by_bus[bid] = "UNKNOWN"
+
+            if bid in attendance_by_bus:
+                # Add to existing bus attendance
+                attendance_by_bus[bid]["total_present"] += avg_present
+                attendance_by_bus[bid]["total_present_sum"] += int(total_present_count or 0)
+                attendance_by_bus[bid]["bus_present"] += avg_present
+                attendance_by_bus[bid]["bus_present_sum"] += int(total_present_count or 0)
+            else:
+                # Create new entry for unknown bus
+                attendance_by_bus[bid] = {
+                    "bus_present": avg_present,
+                    "van_present": 0,
+                    "total_present": avg_present,
+                    "bus_present_sum": int(total_present_count or 0),
+                    "van_present_sum": 0,
+                    "total_present_sum": int(total_present_count or 0),
+                }
+
     roster_query = db.query(
         Employee.bus_id,
         func.sum(case((Employee.van_id.is_(None), 1), else_=0)).label("bus_roster"),
@@ -681,6 +740,49 @@ def bus_detail(
     absent_total = max(roster_total - present_total, 0)
     absent_bus = max(roster_bus - present_bus, 0)
     absent_van = max(roster_van - present_van, 0)
+
+    # Query unknown_attendances for this bus_id
+    # These are PersonIds that appeared in attendance but are not in master list
+    # Show ALL records (not grouped), so user can see all attendance entries
+    unknown_attendance_rows = (
+        db.query(
+            UnknownAttendance.scanned_batch_id,
+            UnknownAttendance.route_raw,
+            UnknownAttendance.scanned_at,
+            UnknownAttendance.scanned_on,
+            UnknownAttendance.shift,
+        )
+        .filter(UnknownAttendance.bus_id == bus_id)
+        .filter(UnknownAttendance.scanned_on >= target_from)
+        .filter(UnknownAttendance.scanned_on <= target_to)
+    )
+    if target_shift:
+        unknown_attendance_rows = unknown_attendance_rows.filter(UnknownAttendance.shift == target_shift)
+    unknown_attendance_rows = unknown_attendance_rows.order_by(
+        UnknownAttendance.scanned_on.desc(),
+        UnknownAttendance.scanned_batch_id
+    ).all()
+
+    # Add unknown attendances as special entries
+    for batch_id, route_raw, scanned_at, scanned_on, shift in unknown_attendance_rows:
+        pid = int(batch_id)
+        entries.append(
+            BusRosterEntry(
+                personid=pid,
+                name=f"Unknown PersonId {pid} ({scanned_on.isoformat()} {shift.value})",
+                category="bus",
+                van_code=None,
+                pickup_point=route_raw,  # Use route_raw as pickup_point to show route info
+                contractor="UNKNOWN - Not in Master List",
+                plant="UNKNOWN",
+                present=True,
+                scanned_at=scanned_at.isoformat() if scanned_at else None,
+            )
+        )
+        present_total += 1
+        present_bus += 1
+
+    # Recalculate attendance rate including unknown attendances
     attendance_rate_pct = round((present_total / roster_total) * 100, 1) if roster_total > 0 else 0.0
 
     return BusDetailResponse(
@@ -821,4 +923,154 @@ def get_filter_options(db: Session = Depends(get_db)):
         "plants": plants,
         "shifts": shifts,
     }
+
+
+@router.get("/unknown-attendances")
+def get_unknown_attendances(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    bus_id: Optional[str] = None,
+    shift: Optional[str] = None,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """
+    Query unknown attendance records - PersonIds that appeared in attendance
+    but were not found in the master list.
+
+    Returns records with:
+    - scanned_batch_id: The PersonId from attendance file
+    - route_raw: The original route string from attendance file
+    - bus_id: Normalized bus_id (if parseable)
+    - shift: morning/night/unknown
+    - scanned_on: The date
+    """
+    query = db.query(UnknownAttendance)
+
+    # Date filters
+    if date_from:
+        try:
+            start_date = date_type.fromisoformat(date_from)
+            query = query.filter(UnknownAttendance.scanned_on >= start_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_from format. Use YYYY-MM-DD")
+
+    if date_to:
+        try:
+            end_date = date_type.fromisoformat(date_to)
+            query = query.filter(UnknownAttendance.scanned_on <= end_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_to format. Use YYYY-MM-DD")
+
+    # Bus filter
+    if bus_id:
+        bus_ids_list = parse_comma_list(bus_id)
+        if bus_ids_list:
+            query = query.filter(UnknownAttendance.bus_id.in_(bus_ids_list))
+
+    # Shift filter
+    if shift:
+        shifts_list = parse_comma_list(shift)
+        if shifts_list:
+            query = query.filter(UnknownAttendance.shift.in_(shifts_list))
+
+    # Get total count
+    total_count = query.count()
+
+    # Get paginated results
+    records = (
+        query
+        .order_by(UnknownAttendance.scanned_on.desc(), UnknownAttendance.scanned_batch_id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "total_count": total_count,
+        "limit": limit,
+        "offset": offset,
+        "records": [
+            {
+                "id": r.id,
+                "scanned_batch_id": r.scanned_batch_id,
+                "route_raw": r.route_raw,
+                "bus_id": r.bus_id,
+                "shift": r.shift.value if r.shift else None,
+                "scanned_on": r.scanned_on.isoformat() if r.scanned_on else None,
+                "scanned_at": r.scanned_at.isoformat() if r.scanned_at else None,
+                "source": r.source,
+            }
+            for r in records
+        ],
+    }
+
+
+@router.get("/unknown-attendances/summary")
+def get_unknown_attendances_summary(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Get summary statistics for unknown attendance records.
+    Useful for dashboard widgets showing how many unknown routes/PersonIds exist.
+    """
+    query = db.query(UnknownAttendance)
+
+    # Date filters
+    if date_from:
+        try:
+            start_date = date_type.fromisoformat(date_from)
+            query = query.filter(UnknownAttendance.scanned_on >= start_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_from format. Use YYYY-MM-DD")
+
+    if date_to:
+        try:
+            end_date = date_type.fromisoformat(date_to)
+            query = query.filter(UnknownAttendance.scanned_on <= end_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_to format. Use YYYY-MM-DD")
+
+    # Total count
+    total_count = query.count()
+
+    # Unique PersonIds
+    unique_personids = db.query(func.count(func.distinct(UnknownAttendance.scanned_batch_id))).scalar() or 0
+
+    # Unique routes (bus_ids)
+    unique_routes = db.query(func.count(func.distinct(UnknownAttendance.bus_id))).filter(
+        UnknownAttendance.bus_id.isnot(None)
+    ).scalar() or 0
+
+    # Group by bus_id for route breakdown
+    route_breakdown = (
+        db.query(
+            UnknownAttendance.bus_id,
+            UnknownAttendance.route_raw,
+            func.count(UnknownAttendance.id).label("count"),
+        )
+        .filter(UnknownAttendance.bus_id.isnot(None))
+        .group_by(UnknownAttendance.bus_id, UnknownAttendance.route_raw)
+        .order_by(func.count(UnknownAttendance.id).desc())
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "total_records": total_count,
+        "unique_personids": unique_personids,
+        "unique_routes": unique_routes,
+        "top_routes": [
+            {
+                "bus_id": r.bus_id,
+                "route_raw": r.route_raw,
+                "count": r.count,
+            }
+            for r in route_breakdown
+        ],
+    }
+
 
