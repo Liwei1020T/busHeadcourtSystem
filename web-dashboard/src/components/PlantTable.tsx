@@ -19,7 +19,7 @@ type FlatItem =
   | { type: 'ROW'; bus: OccupancyBusRow; plantId: string };
 
 // Row heights
-const HEADER_HEIGHT = 50;
+const HEADER_HEIGHT = 64;
 const TABLE_HEADER_HEIGHT = 36;
 const ROW_HEIGHT = 64; // Increased to accommodate the progress bar
 
@@ -58,7 +58,7 @@ function PlantHeader({
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors border-b"
+      className="w-full flex items-center justify-between px-4 py-4 bg-slate-50 hover:bg-slate-100 transition-colors border-b"
     >
       <div className="flex items-center gap-3">
         {isExpanded ? (
