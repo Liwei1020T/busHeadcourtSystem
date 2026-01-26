@@ -10,6 +10,7 @@ import AlertBanner from '../components/AlertBanner';
 import Sidebar from '../components/Sidebar';
 import PlantTable from '../components/PlantTable';
 import PlantAnalyticsDashboard from '../components/PlantAnalyticsDashboard';
+import TrendAnalysisView from '../components/TrendAnalysisView';
 import BusDetailDrawer from '../components/BusDetailDrawer';
 import { DashboardMode } from '../components/ModeToggle';
 
@@ -283,7 +284,7 @@ export default function BusDashboard() {
           ) : occupancy ? (
             mode === 'live' ? (
               <PlantTable plants={plants} onBusClick={(bus) => setSelectedBus(bus)} />
-            ) : (
+            ) : mode === 'analytics' ? (
               <PlantAnalyticsDashboard
                 plants={plants}
                 totalBusPresent={totalBusPresent}
@@ -297,6 +298,11 @@ export default function BusDashboard() {
                 dateFrom={activeFilters.date_from}
                 dateTo={activeFilters.date_to}
                 numDays={numDays}
+              />
+            ) : (
+              <TrendAnalysisView
+                filters={activeFilters}
+                onFilterChange={setFilters}
               />
             )
           ) : null}

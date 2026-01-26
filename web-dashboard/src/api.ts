@@ -18,7 +18,10 @@ import {
   AttendanceUploadResponse,
   OccupancyResponse,
   BusDetailResponse,
+  TrendAnalysisData,
+  TrendDataPoint,
 } from './types';
+import { format, parseISO, differenceInDays, eachDayOfInterval, subDays } from 'date-fns';
 
 const API_BASE = '/api';
 
@@ -328,3 +331,100 @@ export async function fetchBusDetail(
 
   return response.json();
 }
+
+/**
+ * Fetch trend analysis data for a date range with optional comparison to previous period.
+ * Fetches occupancy data for each day and aggregates for trend visualization.
+ */
+export async function fetchTrendData(params: {
+  date_from: string;
+  date_to: string;
+  plants?: string[];
+  shifts?: string[];
+  bus_ids?: string[];
+  routes?: string[];
+  includePrevious?: boolean; // Fetch previous period for comparison
+}): Promise<TrendAnalysisData> {
+  // 1. Validate date range (max 90 days)
+  const startDate = parseISO(params.date_from);
+  const endDate = parseISO(params.date_to);
+  const daysDiff = differenceInDays(endDate, startDate);
+
+  if (daysDiff < 0) {
+    throw new Error('End date must be after start date');
+  }
+
+  if (daysDiff > 90) {
+    throw new Error('Trend analysis limited to 90 days');
+  }
+
+  // 2. Generate date arrays for current and previous periods
+  const currentDates = eachDayOfInterval({ start: startDate, end: endDate }).map(d => format(d, 'yyyy-MM-dd'));
+
+  let previousDates: string[] = [];
+  if (params.includePrevious) {
+    const prevStart = subDays(startDate, daysDiff + 1);
+    const prevEnd = subDays(endDate, daysDiff + 1);
+    previousDates = eachDayOfInterval({ start: prevStart, end: prevEnd }).map(d => format(d, 'yyyy-MM-dd'));
+  }
+
+  // 3. Fetch occupancy for each day in parallel
+  const fetchForDates = async (dates: string[]): Promise<TrendDataPoint[]> => {
+    const dailyPromises = dates.map(date =>
+      fetchOccupancy({
+        date_from: date,
+        date_to: date,
+        plants: params.plants || [],
+        shifts: params.shifts || [],
+        bus_ids: params.bus_ids || [],
+        routes: params.routes || [],
+      })
+    );
+
+    const dailyResults = await Promise.all(dailyPromises);
+
+    return dailyResults.map((dayData, index) => ({
+      date: dates[index],
+      roster: dayData.total_roster,
+      present: dayData.total_present,
+      attendance_rate: dayData.total_roster > 0
+        ? (dayData.total_present / dayData.total_roster) * 100
+        : 0,
+    }));
+  };
+
+  const [currentDaily, previousDaily] = await Promise.all([
+    fetchForDates(currentDates),
+    params.includePrevious ? fetchForDates(previousDates) : Promise.resolve([]),
+  ]);
+
+  // 4. Calculate summary statistics
+  const totalRoster = currentDaily.reduce((sum, d) => sum + d.roster, 0);
+  const totalPresent = currentDaily.reduce((sum, d) => sum + d.present, 0);
+  const avgAttendanceRate = totalRoster > 0 ? (totalPresent / totalRoster) * 100 : 0;
+
+  let prevAvgAttendanceRate: number | undefined;
+  let attendanceRateChange: number | undefined;
+
+  if (previousDaily.length > 0) {
+    const prevTotalRoster = previousDaily.reduce((sum, d) => sum + d.roster, 0);
+    const prevTotalPresent = previousDaily.reduce((sum, d) => sum + d.present, 0);
+    prevAvgAttendanceRate = prevTotalRoster > 0 ? (prevTotalPresent / prevTotalRoster) * 100 : 0;
+    attendanceRateChange = avgAttendanceRate - prevAvgAttendanceRate;
+  }
+
+  return {
+    daily: currentDaily,
+    previous: previousDaily.length > 0 ? previousDaily : undefined,
+    summary: {
+      avg_attendance_rate: avgAttendanceRate,
+      total_roster: totalRoster,
+      total_present: totalPresent,
+      date_from: params.date_from,
+      date_to: params.date_to,
+      prev_avg_attendance_rate: prevAvgAttendanceRate,
+      attendance_rate_change: attendanceRateChange,
+    },
+  };
+}
+

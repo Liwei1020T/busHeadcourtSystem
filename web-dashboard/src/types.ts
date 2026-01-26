@@ -221,3 +221,36 @@ export type FilterOptions = {
   plants: string[];
   shifts: string[];
 };
+
+// Trend Analysis Types
+export type TrendDataPoint = {
+  date: string; // YYYY-MM-DD
+  roster: number;
+  present: number;
+  attendance_rate: number; // percentage
+  // Optional breakdowns
+  plants?: Record<string, { roster: number; present: number; attendance_rate: number }>;
+  shifts?: {
+    morning?: { roster: number; present: number; attendance_rate: number };
+    night?: { roster: number; present: number; attendance_rate: number };
+  };
+};
+
+export type TrendAnalysisData = {
+  daily: TrendDataPoint[];
+  previous?: TrendDataPoint[]; // For week-over-week comparison
+  summary: {
+    avg_attendance_rate: number;
+    total_roster: number;
+    total_present: number;
+    date_from: string;
+    date_to: string;
+    // Comparison with previous period
+    prev_avg_attendance_rate?: number;
+    attendance_rate_change?: number; // percentage point change
+  };
+};
+
+export type TrendBreakdown = 'none' | 'plant' | 'shift';
+export type TrendMetric = 'absolute' | 'rate';
+export type TrendView = 'daily' | 'weekly';
