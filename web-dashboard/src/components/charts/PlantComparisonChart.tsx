@@ -48,7 +48,8 @@ export default function PlantComparisonChart({ plants, onPlantClick }: PlantComp
         </div>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={250}>
+          <div style={{ width: '100%', height: 250 }}>
+            <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
 
@@ -100,7 +101,8 @@ export default function PlantComparisonChart({ plants, onPlantClick }: PlantComp
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
 
           {/* Bottom summary - clickable */}
           <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-xs">

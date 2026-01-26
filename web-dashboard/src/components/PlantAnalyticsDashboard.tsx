@@ -96,7 +96,7 @@ export default function PlantAnalyticsDashboard({
   numDays = 1,
   totalBusPresentSum,
   totalBusCapacitySum,
-  totalPresentSum: _totalPresentSum, // Prefix with underscore to indicate intentionally unused
+  totalPresentSum,
   prevPeriodData,
 }: PlantAnalyticsDashboardProps) {
   const [selectedPlant, setSelectedPlant] = useState<PlantGroup | null>(null);

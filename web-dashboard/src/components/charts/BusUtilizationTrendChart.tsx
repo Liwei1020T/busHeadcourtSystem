@@ -67,7 +67,8 @@ export default function BusUtilizationTrendChart({ data, weeklyData, plants }: B
           <p className="text-xs mt-1">Try selecting a different date range</p>
         </div>
       ) : (
-        <ResponsiveContainer width="100%" height={250}>
+        <div style={{ width: '100%', height: 250 }}>
+          <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 10, right: 20, bottom: 20, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
 
@@ -115,7 +116,8 @@ export default function BusUtilizationTrendChart({ data, weeklyData, plants }: B
               />
             ))}
           </LineChart>
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        </div>
       )}
     </div>
   );

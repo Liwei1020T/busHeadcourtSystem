@@ -90,7 +90,8 @@ export default function RoutePerformanceChart({ plants, onRouteClick }: RoutePer
         </div>
       ) : (
         <>
-          <ResponsiveContainer width="100%" height={280}>
+          <div style={{ width: '100%', height: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}
               layout="vertical"
@@ -149,7 +150,8 @@ export default function RoutePerformanceChart({ plants, onRouteClick }: RoutePer
                 ))}
               </Bar>
             </BarChart>
-          </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
 
           {/* Summary footer */}
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
