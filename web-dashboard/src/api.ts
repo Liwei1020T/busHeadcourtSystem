@@ -363,8 +363,11 @@ export async function fetchTrendData(params: {
 
   let previousDates: string[] = [];
   if (params.includePrevious) {
-    const prevStart = subDays(startDate, daysDiff + 1);
-    const prevEnd = subDays(endDate, daysDiff + 1);
+    // For a 7-day period (e.g., Jan 7-13), previous period should be 7 days before
+    // prevStart = Jan 7 - 7 = Dec 31, prevEnd = Jan 6
+    const periodLength = daysDiff + 1; // +1 because both dates are inclusive
+    const prevEnd = subDays(startDate, 1); // Day before current period starts
+    const prevStart = subDays(prevEnd, periodLength - 1); // Go back by period length
     previousDates = eachDayOfInterval({ start: prevStart, end: prevEnd }).map(d => format(d, 'yyyy-MM-dd'));
   }
 
