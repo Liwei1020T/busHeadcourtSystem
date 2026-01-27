@@ -65,7 +65,7 @@ up:
 	cd infra && docker-compose up -d
 	@echo ""
 	@echo "Services starting..."
-	@echo "Web Dashboard: http://localhost"
+	@echo "Web Dashboard: http://localhost:5175"
 	@echo "Backend API:   http://localhost:8000"
 	@echo "API Docs:      http://localhost:8000/docs"
 
@@ -143,7 +143,7 @@ test:
 	@echo -n "Backend:   "
 	@curl -sf http://localhost:8000/health > /dev/null 2>&1 && echo "OK" || echo "FAILED"
 	@echo -n "Web:       "
-	@curl -sf http://localhost/ > /dev/null 2>&1 && echo "OK" || echo "FAILED"
+	@curl -sf http://localhost:5175/ > /dev/null 2>&1 && echo "OK" || echo "FAILED"
 
 # Pi Agent (optional)
 up-pi:

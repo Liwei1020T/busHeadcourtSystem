@@ -39,7 +39,7 @@ bus-optimizer-web     Up                      0.0.0.0:80->80/tcp
 
 | Service | URL |
 |---------|-----|
-| Web Dashboard | http://localhost |
+| Web Dashboard | http://localhost:5175 |
 | Backend API | http://localhost:8000 |
 | API Documentation | http://localhost:8000/docs |
 
@@ -129,7 +129,7 @@ nano .env
 Key variables:
 - `POSTGRES_PASSWORD` - Database password
 - `API_KEYS` - API authentication keys
-- `WEB_PORT` - Web dashboard port (default: 80)
+- `WEB_PORT` - Web dashboard port (default: 5175)
 - `BACKEND_PORT` - Backend API port (default: 8000)
 
 ## Full Documentation

@@ -68,7 +68,7 @@ docker-compose up -d
 docker-compose ps
 
 # 5. Access the application
-# Web Dashboard: http://localhost
+# Web Dashboard: http://localhost:5175
 # API Documentation: http://localhost:8000/docs
 ```
 
@@ -157,7 +157,7 @@ docker-compose ps
 NAME                  STATUS                   PORTS
 bus-optimizer-db      Up (healthy)            0.0.0.0:5432->5432/tcp
 bus-optimizer-api     Up                      0.0.0.0:8000->8000/tcp
-bus-optimizer-web     Up                      0.0.0.0:80->80/tcp
+bus-optimizer-web     Up                      0.0.0.0:5175->80/tcp
 ```
 
 ### Step 7: Verify Application Health
@@ -178,7 +178,7 @@ Open your web browser and navigate to:
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Web Dashboard | http://localhost | Main user interface |
+| Web Dashboard | http://localhost:5175 | Main user interface |
 | Backend API | http://localhost:8000 | REST API |
 | API Documentation | http://localhost:8000/docs | Swagger UI |
 | API Redoc | http://localhost:8000/redoc | ReDoc documentation |
@@ -229,7 +229,7 @@ infra/
 | `API_KEYS` | Comma-separated API keys | `ENTRY_GATE:ENTRY_SECRET` |
 | `DEBUG` | Enable debug mode | `false` |
 | **Web** | | |
-| `WEB_PORT` | Web dashboard port | `80` |
+| `WEB_PORT` | Web dashboard port | `5175` |
 | **Pi Agent** | | |
 | `PI_API_BASE_URL` | Backend URL for Pi agent | `http://backend:8000/api/bus` |
 | `PI_API_KEY` | API key for Pi agent | `ENTRY_SECRET` |
@@ -553,7 +553,7 @@ docker-compose ps
 docker-compose logs backend
 
 # Check for port conflicts
-sudo lsof -i :80
+sudo lsof -i :5175
 sudo lsof -i :8000
 sudo lsof -i :5432
 ```
@@ -562,10 +562,10 @@ sudo lsof -i :5432
 
 ```bash
 # Option 1: Kill the process using the port
-sudo kill $(sudo lsof -t -i:80)
+sudo kill $(sudo lsof -t -i:5175)
 
 # Option 2: Change the port in .env
-echo "WEB_PORT=8080" >> .env
+echo "WEB_PORT=5176" >> .env
 docker-compose up -d
 ```
 
@@ -725,7 +725,7 @@ sudo systemctl restart docker
 │  ┌───────────────┐   ┌───────────────┐   ┌───────────────┐│
 │  │     Web       │   │    Backend    │   │   Database    ││
 │  │   (Nginx)     │──▶│   (FastAPI)   │──▶│  (PostgreSQL) ││
-│  │   Port 80     │   │   Port 8000   │   │   Port 5432   ││
+│  │   Port 5175   │   │   Port 8000   │   │   Port 5432   ││
 │  └───────────────┘   └───────────────┘   └───────────────┘│
 │         ▲                    ▲                             │
 │         │              ┌─────┴─────┐                       │
@@ -739,7 +739,7 @@ sudo systemctl restart docker
 
 ### Data Flow
 
-1. **User** accesses Web Dashboard via browser (port 80)
+1. **User** accesses Web Dashboard via browser (port 5175)
 2. **Nginx** serves static files and proxies API requests to Backend
 3. **Backend** (FastAPI) processes requests and queries Database
 4. **Database** (PostgreSQL) stores all application data
