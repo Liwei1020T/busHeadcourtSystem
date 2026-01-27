@@ -1,13 +1,13 @@
 # Build stage
-FROM node:20-alpine as build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install all dependencies (including devDependencies for build)
+RUN npm ci && npm cache clean --force
 
 # Copy source code
 COPY . .
@@ -18,12 +18,18 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 
+# Install curl for health checks
+RUN apk add --no-cache curl
+
 # Copy built files
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Note: nginx.conf should be mounted via docker-compose volume or copied separately
-# Example: docker cp infra/nginx.conf bus-optimizer-web:/etc/nginx/conf.d/default.conf
+# nginx.conf will be mounted via docker-compose volume
 
 EXPOSE 80
+
+# Health check - check if static files are served
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

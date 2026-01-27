@@ -52,3 +52,9 @@ docs/**/*.xlsx
 docs/**/*.xls
 docs/**/*.csv
 .worktrees
+
+# Docker
+infra/.env
+docker-compose.override.yml
+*.dockerignore.bak
+
