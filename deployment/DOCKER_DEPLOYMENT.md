@@ -1,6 +1,6 @@
 # Docker Deployment Guide
 
-Complete guide for deploying the Bus Optimizer system using Docker.
+Complete guide for deploying the Bus System system using Docker.
 
 ## Table of Contents
 
@@ -56,10 +56,10 @@ For those who want to get started immediately:
 ```bash
 # 1. Clone the repository (if not already done)
 git clone <your-repo-url>
-cd bus-optimizer
+cd bus-system
 
 # 2. Navigate to infra directory
-cd infra
+cd deployment
 
 # 3. Start all services
 docker-compose up -d
@@ -80,13 +80,13 @@ docker-compose ps
 
 ```bash
 git clone <your-repo-url>
-cd bus-optimizer
+cd bus-system
 ```
 
 ### Step 2: Navigate to Infrastructure Directory
 
 ```bash
-cd infra
+cd deployment
 ```
 
 ### Step 3: Configure Environment Variables (Optional)
@@ -138,11 +138,11 @@ docker-compose up -d
 
 **Expected output:**
 ```
-Creating network "infra_bus-optimizer-network" with driver "bridge"
+Creating network "infra_bus-system-network" with driver "bridge"
 Creating volume "infra_postgres_data" with local driver
-Creating bus-optimizer-db ... done
-Creating bus-optimizer-api ... done
-Creating bus-optimizer-web ... done
+Creating bus-system-db ... done
+Creating bus-system-api ... done
+Creating bus-system-web ... done
 ```
 
 ### Step 6: Verify Services Are Running
@@ -155,9 +155,9 @@ docker-compose ps
 **Expected output:**
 ```
 NAME                  STATUS                   PORTS
-bus-optimizer-db      Up (healthy)            0.0.0.0:5432->5432/tcp
-bus-optimizer-api     Up                      0.0.0.0:8000->8000/tcp
-bus-optimizer-web     Up                      0.0.0.0:5175->80/tcp
+bus-system-db      Up (healthy)            0.0.0.0:5432->5432/tcp
+bus-system-api     Up                      0.0.0.0:8000->8000/tcp
+bus-system-web     Up                      0.0.0.0:5175->80/tcp
 ```
 
 ### Step 7: Verify Application Health
@@ -202,7 +202,7 @@ docker-compose logs -f db
 ### File Structure
 
 ```
-infra/
+deployment/
 ├── docker-compose.yml      # Main orchestration file
 ├── docker-compose.dev.yml  # Development overrides
 ├── .env                    # Environment variables (created by you)
@@ -358,7 +358,7 @@ docker-compose ps
 docker stats
 
 # View container details
-docker inspect bus-optimizer-api
+docker inspect bus-system-api
 ```
 
 ---
@@ -395,7 +395,7 @@ API_KEYS=ENTRY_GATE:$(openssl rand -hex 32),BUS_SP_01:$(openssl rand -hex 32)
 services:
   caddy:
     image: caddy:2-alpine
-    container_name: bus-optimizer-caddy
+    container_name: bus-system-caddy
     ports:
       - "80:80"
       - "443:443"
@@ -407,7 +407,7 @@ services:
       - web
     restart: unless-stopped
     networks:
-      - bus-optimizer-network
+      - bus-system-network
 
 volumes:
   caddy_data:
@@ -438,18 +438,18 @@ services:
 
 ### Systemd Service (Auto-start on Boot)
 
-Create `/etc/systemd/system/bus-optimizer.service`:
+Create `/etc/systemd/system/bus-system.service`:
 
 ```ini
 [Unit]
-Description=Bus Optimizer Docker Compose
+Description=Bus System Docker Compose
 Requires=docker.service
 After=docker.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/bus-optimizer/infra
+WorkingDirectory=/opt/bus-system/infra
 ExecStart=/usr/bin/docker-compose up -d
 ExecStop=/usr/bin/docker-compose down
 ExecReload=/usr/bin/docker-compose restart
@@ -463,14 +463,14 @@ Enable and start:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable bus-optimizer
-sudo systemctl start bus-optimizer
+sudo systemctl enable bus-system
+sudo systemctl start bus-system
 
 # Check status
-sudo systemctl status bus-optimizer
+sudo systemctl status bus-system
 
 # View logs
-sudo journalctl -u bus-optimizer -f
+sudo journalctl -u bus-system -f
 ```
 
 ### External PostgreSQL
@@ -519,7 +519,7 @@ For production Raspberry Pi deployment, native installation provides better hard
 
 ```bash
 # On Raspberry Pi
-cd /home/pi/bus-optimizer/pi-agent
+cd /home/pi/bus-system/pi-agent
 
 # Create virtual environment
 python3 -m venv .venv
@@ -649,32 +649,32 @@ docker volume prune
 
 ```bash
 # Create backup script
-cat > /opt/bus-optimizer/backup.sh << 'EOF'
+cat > /opt/bus-system/backup.sh << 'EOF'
 #!/bin/bash
-BACKUP_DIR="/opt/bus-optimizer/backups"
+BACKUP_DIR="/opt/bus-system/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 mkdir -p $BACKUP_DIR
-docker-compose -f /opt/bus-optimizer/infra/docker-compose.yml exec -T db pg_dump -U postgres bus_optimizer > "$BACKUP_DIR/backup_$DATE.sql"
+docker-compose -f /opt/bus-system/deployment/docker-compose.yml exec -T db pg_dump -U postgres bus_optimizer > "$BACKUP_DIR/backup_$DATE.sql"
 # Keep only last 7 days
 find $BACKUP_DIR -name "backup_*.sql" -mtime +7 -delete
 echo "Backup completed: $BACKUP_DIR/backup_$DATE.sql"
 EOF
 
-chmod +x /opt/bus-optimizer/backup.sh
+chmod +x /opt/bus-system/backup.sh
 
 # Add to crontab (daily at 2 AM)
-echo "0 2 * * * /opt/bus-optimizer/backup.sh" | crontab -
+echo "0 2 * * * /opt/bus-system/backup.sh" | crontab -
 ```
 
 ### Updating the Application
 
 ```bash
 # Pull latest code
-cd /opt/bus-optimizer
+cd /opt/bus-system
 git pull origin main
 
 # Rebuild and restart
-cd infra
+cd deployment
 docker-compose down
 docker-compose build --no-cache
 docker-compose up -d
@@ -720,7 +720,7 @@ sudo systemctl restart docker
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Docker Network                           │
-│                 (bus-optimizer-network)                     │
+│                 (bus-system-network)                     │
 │                                                             │
 │  ┌───────────────┐   ┌───────────────┐   ┌───────────────┐│
 │  │     Web       │   │    Backend    │   │   Database    ││

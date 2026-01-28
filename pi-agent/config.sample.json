@@ -1,19 +1,5 @@
 {
-  "bus_id": "BUS_SP_01",
   "api_base_url": "http://localhost:8003/api/bus",
-  "api_key": "BUS_SP_01_SECRET",
-  "trips": [
-    {
-      "trip_code": "SP-0630-IN",
-      "direction": "to_factory",
-      "start": "05:30",
-      "end": "08:00"
-    },
-    {
-      "trip_code": "SP-1800-OUT",
-      "direction": "from_factory",
-      "start": "16:30",
-      "end": "20:00"
-    }
-  ]
+  "api_key": "ENTRY_SECRET",
+  "upload_interval_seconds": 60
 }

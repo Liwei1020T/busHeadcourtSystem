@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 export function DashboardSkeleton() {
   return (
     <div className="space-y-6 animate-pulse">
-      {/* KPI 卡片骨架 */}
+      {/* KPI card skeleton */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
           <Card key={i} className="p-6">
@@ -20,7 +20,7 @@ export function DashboardSkeleton() {
         ))}
       </div>
 
-      {/* 表格骨架 */}
+      {/* Table skeleton */}
       <Card className="p-6">
         <Skeleton className="h-6 w-48 mb-4 bg-gray-200" />
         <div className="space-y-3">

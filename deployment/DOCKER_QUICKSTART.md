@@ -12,7 +12,7 @@ Get the system running in under 5 minutes.
 ### Step 1: Navigate to Infrastructure Directory
 
 ```bash
-cd infra
+cd deployment
 ```
 
 ### Step 2: Start All Services
@@ -30,9 +30,9 @@ docker-compose ps
 Expected output:
 ```
 NAME                  STATUS                   PORTS
-bus-optimizer-db      Up (healthy)            0.0.0.0:5432->5432/tcp
-bus-optimizer-api     Up                      0.0.0.0:8000->8000/tcp
-bus-optimizer-web     Up                      0.0.0.0:80->80/tcp
+bus-system-db      Up (healthy)            0.0.0.0:5432->5432/tcp
+bus-system-api     Up                      0.0.0.0:8000->8000/tcp
+bus-system-web     Up                      0.0.0.0:80->80/tcp
 ```
 
 ### Step 4: Access Services

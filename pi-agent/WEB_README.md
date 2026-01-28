@@ -60,17 +60,17 @@ python web_server.py
 
 ## Web Interface Tabs
 
-### 1. Monitor Panel (监控面板)
+### 1. Monitor Panel
 - View scan statistics (uploaded, pending)
 - Recent scan records table
 - Auto-refresh every 30 seconds
 
-### 2. Test Scans (测试扫描)
+### 2. Test Scans
 - Manually input batch IDs to simulate scans
 - View pending uploads
 - Test the system without physical cards
 
-### 3. System Config (系统配置)
+### 3. System Config
 - Configure Bus ID
 - Set API base URL
 - Update API key

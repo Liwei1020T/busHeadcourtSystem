@@ -34,6 +34,6 @@ Description=Bus Passenger Counter Agent
 After=network.target
 
 [Service]
-ExecStart=/home/pi/bus-optimizer/pi-agent/venv/bin/python main.py
+ExecStart=/home/pi/bus-system/pi-agent/venv/bin/python main.py
 Restart=always
 ```

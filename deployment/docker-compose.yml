@@ -2,7 +2,7 @@ services:
   # PostgreSQL Database
   db:
     image: postgres:15-alpine
-    container_name: bus-optimizer-db
+    container_name: bus-system-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -19,14 +19,14 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      - bus-optimizer-network
+      - bus-system-network
 
   # Backend API
   backend:
     build:
       context: ../backend
-      dockerfile: ../infra/Dockerfile.backend
-    container_name: bus-optimizer-api
+      dockerfile: ../deployment/Dockerfile.backend
+    container_name: bus-system-api
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-bus_optimizer}
       API_KEYS: ${API_KEYS:-ENTRY_GATE:ENTRY_SECRET}
@@ -38,14 +38,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - bus-optimizer-network
+      - bus-system-network
 
   # Web Dashboard
   web:
     build:
       context: ../web-dashboard
-      dockerfile: ../infra/Dockerfile.web
-    container_name: bus-optimizer-web
+      dockerfile: ../deployment/Dockerfile.web
+    container_name: bus-system-web
     ports:
       - "${WEB_PORT:-5175}:80"
     volumes:
@@ -54,14 +54,14 @@ services:
       - backend
     restart: unless-stopped
     networks:
-      - bus-optimizer-network
+      - bus-system-network
 
   # Pi Agent (Optional - for containerized deployment)
   pi-agent:
     build:
       context: ..
-      dockerfile: ./infra/Dockerfile.pi-agent
-    container_name: bus-optimizer-pi-agent
+      dockerfile: ./deployment/Dockerfile.pi-agent
+    container_name: bus-system-pi-agent
     environment:
       API_BASE_URL: ${PI_API_BASE_URL:-http://backend:8000/api/bus}
       API_KEY: ${PI_API_KEY:-ENTRY_SECRET}
@@ -72,7 +72,7 @@ services:
       - backend
     restart: unless-stopped
     networks:
-      - bus-optimizer-network
+      - bus-system-network
     profiles:
       - pi-agent  # Only start if explicitly requested
 
@@ -83,6 +83,6 @@ volumes:
     driver: local
 
 networks:
-  bus-optimizer-network:
+  bus-system-network:
     driver: bridge
 
