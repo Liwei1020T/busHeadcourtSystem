@@ -15,7 +15,7 @@ class Van(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     van_code = Column(String(20), unique=True, nullable=False, index=True)
-    bus_id = Column(String(10), ForeignKey("buses.bus_id"), nullable=False, index=True)
+    bus_id = Column(String(10), ForeignKey("buses.bus_id"), nullable=True, index=True)
     plate_number = Column(String(50), nullable=True)
     driver_name = Column(String(100), nullable=True)
     capacity = Column(Integer, nullable=True)

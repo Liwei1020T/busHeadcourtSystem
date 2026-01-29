@@ -12,21 +12,42 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, or_
 
 from app.core.db import get_db
-from app.models import Attendance, AttendanceShift, Bus, Employee
+from app.core.cache import ttl_cache
+from app.models import Attendance, AttendanceShift, Bus, Employee, EmployeeMaster, Van, UnknownAttendance
 from app.schemas.report import (
     HeadcountRow,
     HeadcountResponse,
     AttendanceRecord,
     SummaryResponse,
     TripSummary,
+    OccupancyBusRow,
+    OccupancyResponse,
+    BusDetailResponse,
+    BusRosterEntry,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/report", tags=["report"])
+
+
+def parse_bus_ids(bus_id: Optional[str]) -> list[str]:
+    """Accept comma-separated bus ids, e.g. 'A01,A02'. Empty entries are ignored."""
+    if not bus_id:
+        return []
+    parts = [p.strip() for p in bus_id.split(",")]
+    return [p for p in parts if p]
+
+
+def parse_comma_list(value: Optional[str]) -> list[str]:
+    """Parse comma-separated values into a list. Empty entries are ignored."""
+    if not value:
+        return []
+    parts = [p.strip() for p in value.split(",")]
+    return [p for p in parts if p]
 
 
 def parse_date(value: Optional[str]) -> Optional[date_type]:
@@ -47,12 +68,27 @@ def validate_shift(value: Optional[str]) -> Optional[AttendanceShift]:
         raise HTTPException(status_code=400, detail="Invalid shift. Use morning, night, or unknown.")
 
 
+def validate_shifts(value: Optional[str]) -> List[AttendanceShift]:
+    """Parse comma-separated shifts and validate each."""
+    if value is None or value == "":
+        return []
+    parts = parse_comma_list(value)
+    result = []
+    for p in parts:
+        try:
+            result.append(AttendanceShift(p))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid shift '{p}'. Use morning, night, or unknown.")
+    return result
+
+
 def _query_headcount_rows(
     date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
     date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     shift: Optional[str] = Query(None, description="Filter by shift (morning/night)"),
-    bus_id: Optional[str] = Query(None, description="Filter by bus ID"),
+    bus_id: Optional[str] = Query(None, description="Filter by bus ID (comma-separated supported)"),
+    route: Optional[str] = Query(None, description="Filter by route (substring match)"),
     db: Session = Depends(get_db),
 ) -> List[HeadcountRow]:
     """Shared query for headcount rows (JSON and CSV)."""
@@ -60,6 +96,7 @@ def _query_headcount_rows(
     target_from = parse_date(date_from)
     target_to = parse_date(date_to)
     target_shift = validate_shift(shift)
+    bus_ids = parse_bus_ids(bus_id)
 
     present_case = case((Attendance.status == "present", 1), else_=0)
     unknown_batch_case = case((Attendance.status == "unknown_batch", 1), else_=0)
@@ -85,8 +122,10 @@ def _query_headcount_rows(
             query = query.filter(Attendance.scanned_on <= target_to)
     if target_shift:
         query = query.filter(Attendance.shift == target_shift)
-    if bus_id:
-        query = query.filter(Attendance.bus_id == bus_id)
+    if bus_ids:
+        query = query.filter(Attendance.bus_id.in_(bus_ids))
+    if route:
+        query = query.filter(or_(Bus.route.ilike(f"%{route}%"), Attendance.bus_id.ilike(f"%{route}%")))
 
     query = query.group_by(Attendance.scanned_on, Attendance.shift, Attendance.bus_id, Bus.route)
     query = query.order_by(Attendance.scanned_on.desc(), Attendance.shift, Attendance.bus_id)
@@ -115,10 +154,11 @@ def headcount(
     date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     shift: Optional[str] = Query(None, description="Filter by shift (morning/night/unknown)"),
     bus_id: Optional[str] = Query(None, description="Filter by bus ID"),
+    route: Optional[str] = Query(None, description="Filter by route (substring match)"),
     db: Session = Depends(get_db),
 ):
     """Get per-bus headcount aggregated by date and shift. Supports single date or date range."""
-    rows = _query_headcount_rows(date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id, db=db)
+    rows = _query_headcount_rows(date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id, route=route, db=db)
     return HeadcountResponse(rows=rows)
 
 
@@ -129,10 +169,11 @@ def headcount_export(
     date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     shift: Optional[str] = Query(None, description="Filter by shift (morning/night/unknown)"),
     bus_id: Optional[str] = Query(None, description="Filter by bus ID"),
+    route: Optional[str] = Query(None, description="Filter by route (substring match)"),
     db: Session = Depends(get_db),
 ):
     """Export headcount aggregates as CSV using the same filters as the JSON endpoint."""
-    rows = _query_headcount_rows(date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id, db=db)
+    rows = _query_headcount_rows(date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id, route=route, db=db)
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -140,7 +181,7 @@ def headcount_export(
     for row in rows:
         writer.writerow([row.date, row.shift, row.bus_id, row.route or "", row.present, row.unknown_batch, row.unknown_shift, row.total])
 
-    filename = _build_filename(prefix="headcount", date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id)
+    filename = _build_filename(prefix="headcount", date=date, date_from=date_from, date_to=date_to, shift=shift, bus_id=bus_id, route=route)
     buffer.seek(0)
     return StreamingResponse(
         iter([buffer.getvalue()]),
@@ -149,7 +190,15 @@ def headcount_export(
     )
 
 
-def _build_filename(prefix: str, date: Optional[str], date_from: Optional[str], date_to: Optional[str], shift: Optional[str], bus_id: Optional[str]) -> str:
+def _build_filename(
+    prefix: str,
+    date: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+    shift: Optional[str],
+    bus_id: Optional[str],
+    route: Optional[str] = None,
+) -> str:
     """Create a descriptive filename for exports."""
     parts = [prefix]
     if date:
@@ -163,6 +212,8 @@ def _build_filename(prefix: str, date: Optional[str], date_from: Optional[str], 
         parts.append(f"shift-{shift}")
     if bus_id:
         parts.append(f"bus-{bus_id}")
+    if route:
+        parts.append(f"route-{route}")
     return "_".join(parts) + ".csv"
 
 
@@ -261,6 +312,499 @@ def attendance_export(
     )
 
 
+@router.get("/occupancy", response_model=OccupancyResponse)
+@ttl_cache(ttl_seconds=60)
+def occupancy(
+    date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
+    date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    shift: Optional[str] = Query(None, description="Filter by shift (comma-separated: morning,night)"),
+    bus_id: Optional[str] = Query(None, description="Filter by bus ID (comma-separated supported)"),
+    route: Optional[str] = Query(None, description="Filter by route (comma-separated supported)"),
+    plant: Optional[str] = Query(None, description="Filter by plant/building_id (comma-separated: P1,P2,BK)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Return per-bus capacity vs actual occupancy, including a bus-vs-van breakdown.
+    Supports multi-select filters for shift, bus_id, route, and plant.
+    """
+    target_date = parse_date(date)
+    target_from = parse_date(date_from)
+    target_to = parse_date(date_to)
+    target_shifts = validate_shifts(shift)
+    bus_ids = parse_bus_ids(bus_id)
+    routes = parse_comma_list(route)
+    plants = parse_comma_list(plant)
+
+    # Query bus metadata
+    bus_rows_query = db.query(Bus.bus_id, Bus.route, func.coalesce(Bus.capacity, 0))
+    if bus_ids:
+        bus_rows_query = bus_rows_query.filter(Bus.bus_id.in_(bus_ids))
+    if routes:
+        route_filters = [Bus.route.ilike(f"%{r}%") for r in routes]
+        bus_rows_query = bus_rows_query.filter(or_(*route_filters))
+    bus_rows = bus_rows_query.all()
+    bus_meta = {r[0]: {"route": r[1], "bus_capacity": int(r[2] or 0)} for r in bus_rows}
+    allowed_bus_ids = set(bus_meta.keys()) if (routes and not bus_ids) else None
+
+    # Query building_id for each bus from employee_master (most common building_id)
+    building_query = (
+        db.query(
+            Employee.bus_id,
+            EmployeeMaster.building_id,
+            func.count(Employee.id).label("cnt")
+        )
+        .join(EmployeeMaster, Employee.batch_id == EmployeeMaster.personid, isouter=True)
+        .filter(Employee.active.is_(True))
+        .group_by(Employee.bus_id, EmployeeMaster.building_id)
+    )
+    if bus_ids:
+        building_query = building_query.filter(Employee.bus_id.in_(bus_ids))
+    elif allowed_bus_ids is not None:
+        building_query = building_query.filter(Employee.bus_id.in_(allowed_bus_ids))
+
+    building_rows = building_query.all()
+    # Get the most common building_id for each bus
+    bus_building_counts: dict = {}
+    for bid, bld_id, cnt in building_rows:
+        if bid not in bus_building_counts:
+            bus_building_counts[bid] = {}
+        if bld_id:
+            bus_building_counts[bid][bld_id] = bus_building_counts[bid].get(bld_id, 0) + cnt
+
+    building_by_bus = {}
+    for bid, counts in bus_building_counts.items():
+        if counts:
+            building_by_bus[bid] = max(counts.keys(), key=lambda k: counts[k])
+        else:
+            building_by_bus[bid] = None
+
+    # Filter by plant if specified
+    if plants:
+        plants_upper = [p.upper() for p in plants]
+        filtered_bus_ids = set()
+        for bid, bld in building_by_bus.items():
+            if bld and bld.upper() in plants_upper:
+                filtered_bus_ids.add(bid)
+            elif not bld and "UNKNOWN" in plants_upper:
+                filtered_bus_ids.add(bid)
+        if allowed_bus_ids is not None:
+            allowed_bus_ids = allowed_bus_ids & filtered_bus_ids
+        elif bus_ids:
+            bus_ids = [b for b in bus_ids if b in filtered_bus_ids]
+        else:
+            allowed_bus_ids = filtered_bus_ids
+
+    # Query van metadata
+    van_meta_query = db.query(
+        Van.bus_id,
+        func.count(Van.id).label("van_count"),
+        func.sum(func.coalesce(Van.capacity, 0)).label("van_capacity"),
+    ).filter(Van.active.is_(True))
+    if bus_ids:
+        van_meta_query = van_meta_query.filter(Van.bus_id.in_(bus_ids))
+    elif allowed_bus_ids is not None:
+        van_meta_query = van_meta_query.filter(Van.bus_id.in_(allowed_bus_ids))
+    van_meta_rows = van_meta_query.group_by(Van.bus_id).all()
+    van_capacity = {r[0]: int(r[2] or 0) for r in van_meta_rows}
+    van_count = {r[0]: int(r[1] or 0) for r in van_meta_rows}
+
+    present_case = case((Attendance.status == "present", 1), else_=0)
+    bus_present_case = case((Attendance.status == "present", case((Attendance.van_id.is_(None), 1), else_=0)), else_=0)
+    van_present_case = case((Attendance.status == "present", case((Attendance.van_id.is_not(None), 1), else_=0)), else_=0)
+
+    # Calculate number of days in range for averaging
+    num_days = 1
+    if target_date:
+        num_days = 1
+    elif target_from and target_to:
+        num_days = max(1, (target_to - target_from).days + 1)
+
+    attendance_query = db.query(
+        Attendance.bus_id,
+        func.sum(bus_present_case).label("bus_present"),
+        func.sum(van_present_case).label("van_present"),
+        func.sum(present_case).label("total_present"),
+    ).filter(
+        Attendance.bus_id.is_not(None),
+        Attendance.bus_id != 'OWN'
+    )
+
+    if target_date:
+        attendance_query = attendance_query.filter(Attendance.scanned_on == target_date)
+    else:
+        if target_from:
+            attendance_query = attendance_query.filter(Attendance.scanned_on >= target_from)
+        if target_to:
+            attendance_query = attendance_query.filter(Attendance.scanned_on <= target_to)
+    if target_shifts:
+        attendance_query = attendance_query.filter(Attendance.shift.in_(target_shifts))
+    if bus_ids:
+        attendance_query = attendance_query.filter(Attendance.bus_id.in_(bus_ids))
+    elif allowed_bus_ids is not None:
+        attendance_query = attendance_query.filter(Attendance.bus_id.in_(allowed_bus_ids))
+
+    attendance_query = attendance_query.group_by(Attendance.bus_id)
+    attendance_rows = attendance_query.all()
+
+    # Calculate daily averages when spanning multiple days
+    attendance_by_bus = {
+        r[0] or "": {
+            "bus_present": round(int(r[1] or 0) / num_days),
+            "van_present": round(int(r[2] or 0) / num_days),
+            "total_present": round(int(r[3] or 0) / num_days),
+            "bus_present_sum": int(r[1] or 0),
+            "van_present_sum": int(r[2] or 0),
+            "total_present_sum": int(r[3] or 0),
+        }
+        for r in attendance_rows
+        if r[0]
+    }
+
+    # Query unknown_attendances for routes not in master list
+    unknown_query = db.query(
+        UnknownAttendance.bus_id,
+        UnknownAttendance.route_raw,
+        func.count(UnknownAttendance.id).label("total_present"),
+    ).filter(
+        UnknownAttendance.bus_id.is_not(None),
+        UnknownAttendance.bus_id != 'OWN'
+    )
+
+    if target_date:
+        unknown_query = unknown_query.filter(UnknownAttendance.scanned_on == target_date)
+    else:
+        if target_from:
+            unknown_query = unknown_query.filter(UnknownAttendance.scanned_on >= target_from)
+        if target_to:
+            unknown_query = unknown_query.filter(UnknownAttendance.scanned_on <= target_to)
+    if target_shifts:
+        unknown_query = unknown_query.filter(UnknownAttendance.shift.in_(target_shifts))
+    if bus_ids:
+        unknown_query = unknown_query.filter(UnknownAttendance.bus_id.in_(bus_ids))
+    elif allowed_bus_ids is not None:
+        unknown_query = unknown_query.filter(UnknownAttendance.bus_id.in_(allowed_bus_ids))
+
+    unknown_query = unknown_query.group_by(UnknownAttendance.bus_id, UnknownAttendance.route_raw)
+    unknown_rows = unknown_query.all()
+
+    # Add unknown attendance to attendance_by_bus and bus_meta
+    for bid, route_raw, total_present_count in unknown_rows:
+        if bid:
+            avg_present = round(int(total_present_count or 0) / num_days)
+
+            # Only mark as UNKNOWN if bus_id is NOT in buses table
+            if bid not in bus_meta:
+                # This bus_id doesn't exist in buses table - it's truly unknown
+                bus_meta[bid] = {
+                    "route": route_raw or f"Route {bid}",
+                    "bus_capacity": 40  # Default capacity for unknown buses
+                }
+                # Set building_id to "UNKNOWN" so frontend can identify it
+                building_by_bus[bid] = "UNKNOWN"
+
+            if bid in attendance_by_bus:
+                # Add to existing bus attendance
+                attendance_by_bus[bid]["total_present"] += avg_present
+                attendance_by_bus[bid]["total_present_sum"] += int(total_present_count or 0)
+                attendance_by_bus[bid]["bus_present"] += avg_present
+                attendance_by_bus[bid]["bus_present_sum"] += int(total_present_count or 0)
+            else:
+                # Create new entry for unknown bus
+                attendance_by_bus[bid] = {
+                    "bus_present": avg_present,
+                    "van_present": 0,
+                    "total_present": avg_present,
+                    "bus_present_sum": int(total_present_count or 0),
+                    "van_present_sum": 0,
+                    "total_present_sum": int(total_present_count or 0),
+                }
+
+    roster_query = db.query(
+        Employee.bus_id,
+        func.sum(case((Employee.van_id.is_(None), 1), else_=0)).label("bus_roster"),
+        func.sum(case((Employee.van_id.is_not(None), 1), else_=0)).label("van_roster"),
+        func.count(Employee.id).label("total_roster"),
+    ).filter(
+        Employee.active.is_(True),
+        Employee.bus_id.is_not(None),
+        Employee.bus_id != 'OWN'
+    )
+
+    if bus_ids:
+        roster_query = roster_query.filter(Employee.bus_id.in_(bus_ids))
+    elif allowed_bus_ids is not None:
+        roster_query = roster_query.filter(Employee.bus_id.in_(allowed_bus_ids))
+
+    roster_query = roster_query.group_by(Employee.bus_id)
+    roster_rows = roster_query.all()
+    roster_by_bus = {
+        r[0]: {
+            "bus_roster": int(r[1] or 0),
+            "van_roster": int(r[2] or 0),
+            "total_roster": int(r[3] or 0),
+        }
+        for r in roster_rows
+        if r[0]
+    }
+
+    all_bus_ids = set(bus_meta.keys()) | set(attendance_by_bus.keys()) | set(roster_by_bus.keys()) | set(van_capacity.keys())
+    if bus_ids:
+        all_bus_ids = all_bus_ids & set(bus_ids)
+    elif allowed_bus_ids is not None:
+        all_bus_ids = all_bus_ids & allowed_bus_ids
+
+    rows: List[OccupancyBusRow] = []
+    totals = {
+        "bus_capacity": 0,
+        "van_count": 0,
+        "van_capacity": 0,
+        "total_capacity": 0,
+        "bus_present": 0,
+        "van_present": 0,
+        "total_present": 0,
+        "bus_present_sum": 0,
+        "van_present_sum": 0,
+        "total_present_sum": 0,
+        "bus_roster": 0,
+        "van_roster": 0,
+        "total_roster": 0,
+    }
+
+    for bid in sorted(all_bus_ids):
+        meta = bus_meta.get(bid, {"route": None, "bus_capacity": 0})
+        vcount = int(van_count.get(bid, 0))
+        vc = int(van_capacity.get(bid, 0))
+        cap = int(meta["bus_capacity"]) + vc
+        attendance = attendance_by_bus.get(bid, {
+            "bus_present": 0, "van_present": 0, "total_present": 0,
+            "bus_present_sum": 0, "van_present_sum": 0, "total_present_sum": 0
+        })
+        roster = roster_by_bus.get(bid, {"bus_roster": 0, "van_roster": 0, "total_roster": 0})
+
+        row_obj = OccupancyBusRow(
+            bus_id=bid,
+            route=meta["route"],
+            building_id=building_by_bus.get(bid),
+            bus_capacity=int(meta["bus_capacity"]),
+            van_count=vcount,
+            van_capacity=vc,
+            total_capacity=cap,
+            bus_present=int(attendance["bus_present"]),
+            van_present=int(attendance["van_present"]),
+            total_present=int(attendance["total_present"]),
+            # New fields
+            num_days=num_days,
+            bus_present_sum=int(attendance["bus_present_sum"]),
+            van_present_sum=int(attendance["van_present_sum"]),
+            total_present_sum=int(attendance["total_present_sum"]),
+            # Roster
+            bus_roster=int(roster["bus_roster"]),
+            van_roster=int(roster["van_roster"]),
+            total_roster=int(roster["total_roster"]),
+        )
+        rows.append(row_obj)
+
+        totals["bus_capacity"] += row_obj.bus_capacity
+        totals["van_count"] += row_obj.van_count
+        totals["van_capacity"] += row_obj.van_capacity
+        totals["total_capacity"] += row_obj.total_capacity
+        totals["bus_present"] += row_obj.bus_present
+        totals["van_present"] += row_obj.van_present
+        totals["total_present"] += row_obj.total_present
+        totals["bus_present_sum"] += row_obj.bus_present_sum
+        totals["van_present_sum"] += row_obj.van_present_sum
+        totals["total_present_sum"] += row_obj.total_present_sum
+        totals["bus_roster"] += row_obj.bus_roster
+        totals["van_roster"] += row_obj.van_roster
+        totals["total_roster"] += row_obj.total_roster
+
+    return OccupancyResponse(
+        rows=rows,
+        num_days=num_days,
+        total_van_count=totals["van_count"],
+        total_bus_capacity=totals["bus_capacity"],
+        total_van_capacity=totals["van_capacity"],
+        total_capacity=totals["total_capacity"],
+        total_bus_present=totals["bus_present"],
+        total_van_present=totals["van_present"],
+        total_present=totals["total_present"],
+        total_bus_present_sum=totals["bus_present_sum"],
+        total_van_present_sum=totals["van_present_sum"],
+        total_present_sum=totals["total_present_sum"],
+        total_bus_roster=totals["bus_roster"],
+        total_van_roster=totals["van_roster"],
+        total_roster=totals["total_roster"],
+    )
+
+
+@router.get("/bus-detail", response_model=BusDetailResponse)
+def bus_detail(
+    date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
+    date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    shift: Optional[str] = Query(None, description="Filter by shift (morning/night/unknown)"),
+    bus_id: str = Query(..., description="Bus ID to inspect"),
+    include_inactive: bool = Query(False, description="Include inactive employees in the roster"),
+    db: Session = Depends(get_db),
+):
+    """
+    Return per-bus roster detail with present vs absent employees.
+
+    Presence is determined by any Attendance(status='present') record in the selected date range (and optional shift).
+    """
+    target_date = parse_date(date)
+    target_from = parse_date(date_from)
+    target_to = parse_date(date_to)
+    target_shift = validate_shift(shift)
+
+    if target_date:
+        target_from = target_date
+        target_to = target_date
+
+    if target_from is None or target_to is None:
+        raise HTTPException(status_code=400, detail="date or date_from+date_to is required")
+
+    bus = db.query(Bus).filter(Bus.bus_id == bus_id).first()
+    route = bus.route if bus else None
+
+    roster_rows = (
+        db.query(
+            Employee.batch_id,
+            Employee.name,
+            Employee.van_id,
+            Van.van_code,
+            EmployeeMaster.pickup_point,
+            EmployeeMaster.transport_contractor,
+            EmployeeMaster.building_id,
+        )
+        .join(Van, Employee.van_id == Van.id, isouter=True)
+        .join(EmployeeMaster, Employee.batch_id == EmployeeMaster.personid, isouter=True)
+        .filter(Employee.bus_id == bus_id)
+        .order_by(Employee.name)
+    )
+    if not include_inactive:
+        roster_rows = roster_rows.filter(Employee.active.is_(True))
+    roster_rows = roster_rows.all()
+
+    present_rows = (
+        db.query(Attendance.scanned_batch_id, func.max(Attendance.scanned_at))
+        .filter(Attendance.status == "present")
+        .filter(Attendance.bus_id == bus_id)
+        .filter(Attendance.scanned_on >= target_from)
+        .filter(Attendance.scanned_on <= target_to)
+    )
+    if target_shift:
+        present_rows = present_rows.filter(Attendance.shift == target_shift)
+    present_rows = present_rows.group_by(Attendance.scanned_batch_id).all()
+
+    present_by_personid = {int(pid): (ts.isoformat() if ts else None) for pid, ts in present_rows if pid is not None}
+
+    entries: list[BusRosterEntry] = []
+    roster_bus = 0
+    roster_van = 0
+    present_bus = 0
+    present_van = 0
+
+    for batch_id, name, van_id, van_code, pickup_point, contractor, building_id in roster_rows:
+        pid = int(batch_id)
+        is_van = van_id is not None
+        present = pid in present_by_personid
+        category = "van" if is_van else "bus"
+
+        if is_van:
+            roster_van += 1
+            if present:
+                present_van += 1
+        else:
+            roster_bus += 1
+            if present:
+                present_bus += 1
+
+        entries.append(
+            BusRosterEntry(
+                personid=pid,
+                name=name,
+                category=category,
+                van_code=van_code,
+                pickup_point=pickup_point,
+                contractor=contractor,
+                plant=building_id,
+                present=present,
+                scanned_at=present_by_personid.get(pid),
+            )
+        )
+
+    roster_total = roster_bus + roster_van
+    present_total = present_bus + present_van
+    absent_total = max(roster_total - present_total, 0)
+    absent_bus = max(roster_bus - present_bus, 0)
+    absent_van = max(roster_van - present_van, 0)
+
+    # Query unknown_attendances for this bus_id
+    # These are PersonIds that appeared in attendance but are not in master list
+    # Show ALL records (not grouped), so user can see all attendance entries
+    unknown_attendance_rows = (
+        db.query(
+            UnknownAttendance.scanned_batch_id,
+            UnknownAttendance.route_raw,
+            UnknownAttendance.scanned_at,
+            UnknownAttendance.scanned_on,
+            UnknownAttendance.shift,
+        )
+        .filter(UnknownAttendance.bus_id == bus_id)
+        .filter(UnknownAttendance.scanned_on >= target_from)
+        .filter(UnknownAttendance.scanned_on <= target_to)
+    )
+    if target_shift:
+        unknown_attendance_rows = unknown_attendance_rows.filter(UnknownAttendance.shift == target_shift)
+    unknown_attendance_rows = unknown_attendance_rows.order_by(
+        UnknownAttendance.scanned_on.desc(),
+        UnknownAttendance.scanned_batch_id
+    ).all()
+
+    # Add unknown attendances as special entries
+    for batch_id, route_raw, scanned_at, scanned_on, shift in unknown_attendance_rows:
+        pid = int(batch_id)
+        entries.append(
+            BusRosterEntry(
+                personid=pid,
+                name=f"Unknown PersonId {pid} ({scanned_on.isoformat()} {shift.value})",
+                category="bus",
+                van_code=None,
+                pickup_point=route_raw,  # Use route_raw as pickup_point to show route info
+                contractor="UNKNOWN - Not in Master List",
+                plant="UNKNOWN",
+                present=True,
+                scanned_at=scanned_at.isoformat() if scanned_at else None,
+            )
+        )
+        present_total += 1
+        present_bus += 1
+
+    # Recalculate attendance rate including unknown attendances
+    attendance_rate_pct = round((present_total / roster_total) * 100, 1) if roster_total > 0 else 0.0
+
+    return BusDetailResponse(
+        bus_id=bus_id,
+        route=route,
+        date_from=target_from.isoformat() if target_from else None,
+        date_to=target_to.isoformat() if target_to else None,
+        shift=target_shift.value if target_shift else None,
+        roster_total=roster_total,
+        roster_bus=roster_bus,
+        roster_van=roster_van,
+        present_total=present_total,
+        present_bus=present_bus,
+        present_van=present_van,
+        absent_total=absent_total,
+        absent_bus=absent_bus,
+        absent_van=absent_van,
+        attendance_rate_pct=attendance_rate_pct,
+        employees=entries,
+    )
+
+
 @router.get("/summary", response_model=SummaryResponse)
 def get_summary(
     date_from: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
@@ -335,3 +879,198 @@ def get_summary(
         saving_estimate=0.0,
         trips=trips,
     )
+
+
+@router.get("/occupancy/filters")
+def get_filter_options(db: Session = Depends(get_db)):
+    """
+    Return available filter options for bus_ids, routes, plants, and shifts.
+    Used to populate multi-select dropdowns in the dashboard.
+    """
+    # Get all bus_ids
+    bus_ids = [r[0] for r in db.query(Bus.bus_id).order_by(Bus.bus_id).all() if r[0]]
+
+    # Get all routes
+    routes = [r[0] for r in db.query(Bus.route).distinct().order_by(Bus.route).all() if r[0]]
+
+    # Get all plants (building_ids) from employee_master
+    building_ids = [
+        r[0] for r in db.query(EmployeeMaster.building_id)
+        .distinct()
+        .filter(EmployeeMaster.building_id.isnot(None))
+        .order_by(EmployeeMaster.building_id)
+        .all()
+        if r[0]
+    ]
+    # Normalize to unique plants
+    plants_set = set()
+    for bid in building_ids:
+        upper = bid.upper().strip()
+        if upper in ("P1", "P2"):
+            plants_set.add(upper)
+        elif upper.startswith("BK"):
+            plants_set.add("BK")
+        else:
+            plants_set.add(upper)
+    plants = sorted(list(plants_set))
+
+    # Shifts are fixed
+    shifts = ["morning", "night"]
+
+    return {
+        "buses": bus_ids,
+        "routes": routes,
+        "plants": plants,
+        "shifts": shifts,
+    }
+
+
+@router.get("/unknown-attendances")
+def get_unknown_attendances(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    bus_id: Optional[str] = None,
+    shift: Optional[str] = None,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """
+    Query unknown attendance records - PersonIds that appeared in attendance
+    but were not found in the master list.
+
+    Returns records with:
+    - scanned_batch_id: The PersonId from attendance file
+    - route_raw: The original route string from attendance file
+    - bus_id: Normalized bus_id (if parseable)
+    - shift: morning/night/unknown
+    - scanned_on: The date
+    """
+    query = db.query(UnknownAttendance)
+
+    # Date filters
+    if date_from:
+        try:
+            start_date = date_type.fromisoformat(date_from)
+            query = query.filter(UnknownAttendance.scanned_on >= start_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_from format. Use YYYY-MM-DD")
+
+    if date_to:
+        try:
+            end_date = date_type.fromisoformat(date_to)
+            query = query.filter(UnknownAttendance.scanned_on <= end_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_to format. Use YYYY-MM-DD")
+
+    # Bus filter
+    if bus_id:
+        bus_ids_list = parse_comma_list(bus_id)
+        if bus_ids_list:
+            query = query.filter(UnknownAttendance.bus_id.in_(bus_ids_list))
+
+    # Shift filter
+    if shift:
+        shifts_list = parse_comma_list(shift)
+        if shifts_list:
+            query = query.filter(UnknownAttendance.shift.in_(shifts_list))
+
+    # Get total count
+    total_count = query.count()
+
+    # Get paginated results
+    records = (
+        query
+        .order_by(UnknownAttendance.scanned_on.desc(), UnknownAttendance.scanned_batch_id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "total_count": total_count,
+        "limit": limit,
+        "offset": offset,
+        "records": [
+            {
+                "id": r.id,
+                "scanned_batch_id": r.scanned_batch_id,
+                "route_raw": r.route_raw,
+                "bus_id": r.bus_id,
+                "shift": r.shift.value if r.shift else None,
+                "scanned_on": r.scanned_on.isoformat() if r.scanned_on else None,
+                "scanned_at": r.scanned_at.isoformat() if r.scanned_at else None,
+                "source": r.source,
+            }
+            for r in records
+        ],
+    }
+
+
+@router.get("/unknown-attendances/summary")
+def get_unknown_attendances_summary(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Get summary statistics for unknown attendance records.
+    Useful for dashboard widgets showing how many unknown routes/PersonIds exist.
+    """
+    query = db.query(UnknownAttendance)
+
+    # Date filters
+    if date_from:
+        try:
+            start_date = date_type.fromisoformat(date_from)
+            query = query.filter(UnknownAttendance.scanned_on >= start_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_from format. Use YYYY-MM-DD")
+
+    if date_to:
+        try:
+            end_date = date_type.fromisoformat(date_to)
+            query = query.filter(UnknownAttendance.scanned_on <= end_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date_to format. Use YYYY-MM-DD")
+
+    # Total count
+    total_count = query.count()
+
+    # Unique PersonIds
+    unique_personids = db.query(func.count(func.distinct(UnknownAttendance.scanned_batch_id))).scalar() or 0
+
+    # Unique routes (bus_ids)
+    unique_routes = db.query(func.count(func.distinct(UnknownAttendance.bus_id))).filter(
+        UnknownAttendance.bus_id.isnot(None)
+    ).scalar() or 0
+
+    # Group by bus_id for route breakdown
+    route_breakdown = (
+        db.query(
+            UnknownAttendance.bus_id,
+            UnknownAttendance.route_raw,
+            func.count(UnknownAttendance.id).label("count"),
+        )
+        .filter(UnknownAttendance.bus_id.isnot(None))
+        .group_by(UnknownAttendance.bus_id, UnknownAttendance.route_raw)
+        .order_by(func.count(UnknownAttendance.id).desc())
+        .limit(20)
+        .all()
+    )
+
+    return {
+        "total_records": total_count,
+        "unique_personids": unique_personids,
+        "unique_routes": unique_routes,
+        "top_routes": [
+            {
+                "bus_id": r.bus_id,
+                "route_raw": r.route_raw,
+                "count": r.count,
+            }
+            for r in route_breakdown
+        ],
+    }
+
+

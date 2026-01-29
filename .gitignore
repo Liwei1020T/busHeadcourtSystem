@@ -35,6 +35,26 @@ web-dashboard/.vite/
 
 # OS / editor
 .DS_Store
+._*
 Thumbs.db
 .idea/
 .vscode/
+
+# Local text logs / outputs
+server_log*.txt
+**/server_log*.txt
+db_output.txt
+.DS_Store
+._*
+
+# Sensitive data files (do not commit)
+docs/**/*.xlsx
+docs/**/*.xls
+docs/**/*.csv
+.worktrees
+
+# Docker
+deployment/.env
+docker-compose.override.yml
+*.dockerignore.bak
+

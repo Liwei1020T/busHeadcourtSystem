@@ -21,12 +21,13 @@ The Backend System is a FastAPI-based application that serves as the core API fo
     - `db.py`: Database connection and session management.
     - `security.py`: Security-related utilities (authentication/authorization).
 - **`models/`**: Database models representing the schema.
-    - `attendance.py`, `bus.py`, `employee.py`, `scan.py`, `trip.py`, `van.py`.
+    - `attendance.py`, `bus.py`, `employee.py`, `employee_master.py`, `scan.py`, `trip.py`, `van.py`.
 - **`schemas/`**: Pydantic models for request/response validation.
     - `bus.py`, `report.py`.
 
 ## Features
-- **Data Management**: CRUD operations for Buses, Employees, Vans, and Trips.
+- **Master Data Ingestion**: Upload employee master lists to upsert buses, vans, employees, and store raw master fields for audit (`employee_master`).
+- **Data Management**: CRUD operations for Employees (active eligibility), plus read-only listings for buses/vans via master list upserts.
 - **Data Ingestion**: Receives scan data from the Pi Agent.
 - **Reporting**: Provides aggregated data for the dashboard (headcounts, KPIs).
 - **Database Initialization**: Automatically creates tables on startup if they don't exist.

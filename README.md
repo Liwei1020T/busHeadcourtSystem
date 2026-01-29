@@ -5,11 +5,14 @@ A comprehensive system for counting bus passengers using employee cards, analyzi
 ## Table of Contents
 
 - [Overview](#overview)
+- [Key Features](#key-features)
+- [System Modules](#system-modules)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Database Schema](#database-schema)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Usage Guide](#usage-guide)
 - [API Reference](#api-reference)
 - [Production Deployment](#production-deployment)
 - [Troubleshooting](#troubleshooting)
@@ -20,16 +23,86 @@ A comprehensive system for counting bus passengers using employee cards, analyzi
 
 ### Purpose
 This system tracks employee bus ridership at factory facilities to:
-- Record attendance by shift using batch-ID card scans
-- Track headcount per bus/shift/day
+- Record attendance by shift using employee ID card scans at factory entry
+- Track headcount per bus/shift/day with real-time visibility
 - Identify optimization opportunities for bus fleet management
 - Generate reports for cost analysis and route planning
+- Support multiple factories (plants) with centralized management
 
-### Key Features
-- **Offline-first Pi Agent**: Works without network, syncs when connected
-- **Real-time Dashboard**: View passenger counts, load factors, and trends
-- **Automatic Shift Derivation**: Assigns scans to morning/night based on KL time
-- **Deduplication**: Prevents duplicate counting of same employee per day/shift
+---
+
+## Key Features
+
+### 🚌 Passenger Tracking
+- **Entry Scanner System**: Raspberry Pi-based card readers at factory entry gates
+- **Offline-first Operation**: Scans stored locally, uploaded when network available
+- **Automatic Shift Detection**: Morning/night shifts derived from scan time (KL timezone)
+- **Duplicate Prevention**: One scan per employee per shift per day
+- **Unknown Batch Tracking**: Records unrecognized employee IDs for investigation
+
+### 📊 Dashboard & Analytics
+- **Plant-level Overview**: Multi-factory summary with key metrics
+- **Bus-level Dashboard**: Detailed per-bus attendance and load factors
+- **Daily Trends**: Attendance patterns over time with visualizations
+- **Real-time Statistics**: Live passenger counts and capacity utilization
+- **Interactive Filters**: By date range, shift, bus, route, plant
+
+### 👥 Data Management
+- **Employee Master List**: Bulk upload via Excel (PersonId, Name, Transport, Route)
+- **Bus Management**: Configure routes, plate numbers, capacity
+- **Van Management**: Assign vans to buses with driver information
+- **Employee Assignment**: Link employees to buses and vans
+
+### 📈 Reporting & Export
+- **Headcount Reports**: Aggregated attendance by bus/shift/date
+- **Attendance Details**: Individual scan records with timestamps
+- **CSV Exports**: Download reports with current filter settings
+- **Route Analysis**: Unknown routes tracking and reconciliation
+
+### 🔒 Security & Reliability
+- **API Key Authentication**: Per-scanner access control
+- **Data Validation**: Robust error handling and status tracking
+- **Audit Trail**: Source tracking for all attendance records
+- **Health Monitoring**: Service status checks and alerts
+
+---
+
+## System Modules
+
+### 1. Entry Scanner (Pi Agent)
+**Location**: Factory entry gates
+**Function**: Scan employee cards and upload to backend
+**Features**:
+- Offline SQLite storage
+- Configurable upload intervals
+- Status monitoring commands
+- Manual and automatic card reading modes
+
+### 2. Backend API (FastAPI)
+**Location**: Central server
+**Function**: Process scans, manage data, serve dashboard
+**Endpoints**:
+- `/api/bus/*` - Scanner uploads, bus/van/employee management
+- `/api/report/*` - Headcount, attendance, exports
+- `/health` - Service health check
+
+### 3. Web Dashboard (React)
+**Location**: Browser-based interface
+**Pages**:
+- **Plant Dashboard**: Multi-factory overview
+- **Bus Dashboard**: Per-bus detailed analysis
+- **Bus Management**: Configure buses and routes
+- **Van Management**: Manage van assignments
+- **Employee Management**: Employee master list and assignments
+
+### 4. Database (PostgreSQL)
+**Tables**:
+- `buses` - Bus routes and capacity
+- `vans` - Van assignments with drivers
+- `employees` - Employee master with bus/van links
+- `employee_master` - Raw master list data
+- `attendances` - Validated attendance records
+- `unknown_attendances` - Unrecognized scans for review
 
 ---
 
@@ -39,7 +112,7 @@ This system tracks employee bus ridership at factory facilities to:
 ┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
 │   Raspberry Pi      │     │   Backend API       │     │   Web Dashboard     │
 │   + Card Reader     │────▶│   (FastAPI)         │◀────│   (React)           │
-│   (entry scanner)   │     │   Port: 8000        │     │   Port: 5173        │
+│   (entry scanner)   │     │   Port: 8003        │     │   Port: 5175        │
 └─────────────────────┘     └──────────┬──────────┘     └─────────────────────┘
          │                             │
          │                    ┌────────▼────────┐
@@ -62,8 +135,12 @@ This system tracks employee bus ridership at factory facilities to:
 ```
 bus-optimizer/
 ├── README.md                     # This file
+├── Makefile                      # Docker and development commands
 ├── docs/
-│   └── system-design.md          # Detailed system design document
+│   ├── system-design.md          # Detailed system design document
+│   ├── features.md               # Feature documentation
+│   ├── pages/                    # Page-specific documentation
+│   └── plans/                    # Implementation plans
 ├── pi-agent/                     # Raspberry Pi agent (Python)
 │   ├── config.sample.json        # Sample configuration
 │   ├── config.json               # Your configuration (create from sample)
@@ -77,21 +154,27 @@ bus-optimizer/
 │   ├── app/
 │   │   ├── main.py               # FastAPI application
 │   │   ├── api/
-│   │   │   ├── bus.py            # POST /api/bus/upload-scans
-│   │   │   └── report.py         # GET /api/report/*
+│   │   │   ├── bus.py            # Bus, van, employee, scan upload endpoints
+│   │   │   └── report.py         # Reporting endpoints
 │   │   ├── core/
 │   │   │   ├── config.py         # Environment configuration
 │   │   │   ├── db.py             # Database connection
-│   │   │   └── security.py       # API key validation
+│   │   │   ├── security.py       # API key validation
+│   │   │   ├── excel.py          # Excel/CSV export utilities
+│   │   │   └── cache.py          # Caching utilities
 │   │   ├── models/               # SQLAlchemy ORM models
 │   │   │   ├── bus.py
 │   │   │   ├── van.py
 │   │   │   ├── employee.py
-│   │   │   └── attendance.py
+│   │   │   ├── employee_master.py
+│   │   │   ├── attendance.py
+│   │   │   ├── unknown_attendance.py
+│   │   │   ├── trip.py
+│   │   │   └── scan.py
 │   │   └── schemas/              # Pydantic request/response schemas
 │   │       ├── bus.py
 │   │       └── report.py
-│   ├── run_server.py             # Startup script
+│   ├── run_server.py             # Startup script (port 8003)
 │   ├── requirements.txt          # Python dependencies
 │   └── .env.example              # Environment variables template
 ├── web-dashboard/                # React + Tailwind frontend
@@ -101,19 +184,26 @@ bus-optimizer/
 │   │   ├── api.ts                # API client
 │   │   ├── types.ts              # TypeScript types
 │   │   ├── pages/
-│   │   │   └── BusDashboard.tsx  # Main dashboard page
-│   │   └── components/
-│   │       ├── FiltersBar.tsx    # Date/route/direction filters
-│   │       ├── KpiCard.tsx       # KPI display cards
-│   │       ├── TripTable.tsx     # Trip summary table
-│   │       └── ScanTable.tsx     # Scan details table
+│   │   │   ├── BusDashboard.tsx  # Main dashboard page
+│   │   │   ├── PlantDashboard.tsx # Plant-level overview
+│   │   │   ├── BusManagement.tsx # Bus management
+│   │   │   ├── VanManagement.tsx # Van management
+│   │   │   └── EmployeeManagement.tsx # Employee management
+│   │   ├── components/
+│   │   │   ├── charts/           # Chart components
+│   │   │   ├── ui/               # Reusable UI components
+│   │   │   └── ...               # Other components
+│   │   ├── contexts/             # React contexts
+│   │   ├── lib/                  # Libraries and utilities
+│   │   └── utils/                # Utility functions
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── tailwind.config.cjs
-└── infra/                        # Deployment configuration
+└── deployment/                   # Deployment configuration
     ├── docker-compose.yml
     ├── Dockerfile.backend
     ├── Dockerfile.web
+    ├── Dockerfile.pi-agent
     └── nginx.conf
 ```
 
@@ -184,9 +274,9 @@ copy .env.example .env
 python run_server.py
 ```
 
-Backend will be available at: http://localhost:8000
+Backend will be available at: http://localhost:8003
 
-API Documentation: http://localhost:8000/docs
+API Documentation: http://localhost:8003/docs
 
 ### 2. Web Dashboard Setup
 
@@ -201,7 +291,7 @@ npm install
 npm run dev
 ```
 
-Dashboard will be available at: http://localhost:5173
+Dashboard will be available at: http://localhost:5175
 
 ### 3. Pi Agent Setup
 
@@ -231,7 +321,157 @@ python run_agent.py
 3. Start Pi agent (entry scanner): `python run_agent.py` (in pi-agent folder)
 4. In Pi agent terminal, type batch IDs: `BATCH-001`, `BATCH-002`
 5. Wait 60 seconds for auto-upload, or type `status` to check
-6. Hit `GET /api/report/headcount?date=YYYY-MM-DD` or refresh dashboard to see attendance
+6. Visit http://localhost:5175 or hit `GET /api/report/headcount?date=YYYY-MM-DD` to see attendance
+
+### Load Demo Data (Optional)
+
+To populate the database with sample data for testing:
+
+```bash
+cd backend
+
+# For development (SQLite or local PostgreSQL)
+./load_demo_data.sh
+
+# Or load directly with psql (PostgreSQL only)
+psql -U postgres -d bus_optimizer -f demo_data.sql
+```
+
+Demo data includes:
+- 7 buses (Routes A-E) with **fictional** routes (North/South/East/West Districts)
+- 12 vans with **fictional** driver names (Driver Alpha, Beta, etc.)
+- 48 **fictional** employees (Employee A001-E004, OWN01-05)
+- Attendance records for the last 7 days with realistic patterns (85-95% attendance)
+
+**Note**: All names, locations, and details in demo data are completely fictional and for testing purposes only.
+
+After loading demo data, you can immediately explore the dashboard with realistic-looking information.
+
+---
+
+## Usage Guide
+
+### Initial Setup Workflow
+
+1. **Set up Infrastructure** (one-time)
+   ```bash
+   # Start backend and database
+   cd backend
+   python run_server.py
+
+   # Start web dashboard (separate terminal)
+   cd web-dashboard
+   npm run dev
+   ```
+
+2. **Upload Employee Master List**
+   - Navigate to **Employee Management** page
+   - Click "Upload Master List"
+   - Select Excel file with columns: PersonId, Name, Transport, Route, etc.
+   - System automatically creates/updates buses, vans, and employees
+   - Review unknown routes for reconciliation
+
+3. **Configure Bus & Van Details** (optional)
+   - Go to **Bus Management** to set plate numbers and capacity
+   - Go to **Van Management** to assign drivers and plate numbers
+   - Verify employee assignments are correct
+
+4. **Set up Entry Scanners**
+   - Install Pi agent at factory entry gates
+   - Configure `config.json` with backend URL and API key
+   - Test scanner: `python run_agent.py` and scan test cards
+   - Set up as systemd service for automatic startup
+
+5. **Start Monitoring**
+   - Open **Plant Dashboard** for factory-wide overview
+   - Open **Bus Dashboard** for detailed per-bus analysis
+   - Set up daily/weekly report exports
+
+### Daily Operations
+
+#### For Factory Supervisors
+1. **Monitor Attendance**
+   - Check Plant Dashboard for today's headcount
+   - Review any unknown batch IDs
+   - Verify bus load factors and capacity utilization
+
+2. **Generate Reports**
+   - Use date filters to select reporting period
+   - Download CSV exports for management review
+   - Track attendance trends over time
+
+#### For Transport Coordinators
+1. **Optimize Routes**
+   - Review consistent underutilized buses
+   - Check for buses exceeding capacity
+   - Analyze shift-specific patterns
+   - Propose route consolidation or adjustments
+
+2. **Manage Fleet**
+   - Update bus assignments when routes change
+   - Add/remove vans as needed
+   - Reassign employees to different buses/vans
+
+#### For IT Support
+1. **Monitor System Health**
+   - Check backend `/health` endpoint
+   - Review Pi agent upload status
+   - Monitor database size and performance
+
+2. **Handle Issues**
+   - Investigate unknown batch IDs
+   - Resolve duplicate scans
+   - Fix scanner connectivity issues
+
+### Common Tasks
+
+#### Upload New Employee Master List
+```bash
+# Web Dashboard
+1. Go to Employee Management
+2. Click "Upload Master List"
+3. Select Excel file
+4. Review processing results
+5. Check Unknown Routes tab if any warnings
+```
+
+#### Add a New Bus Route
+```bash
+# Web Dashboard
+1. Go to Bus Management
+2. Click "Add Bus"
+3. Fill in: Bus ID, Route name, Plate number, Capacity
+4. Save
+5. Assign employees to new bus in Employee Management
+```
+
+#### Export Monthly Report
+```bash
+# Web Dashboard - Plant/Bus Dashboard
+1. Set date range (e.g., 2025-01-01 to 2025-01-31)
+2. Select shift (or leave blank for all)
+3. Click "Download CSV"
+4. Open in Excel for further analysis
+```
+
+#### Check Scanner Status
+```bash
+# Pi Agent terminal
+1. SSH to Raspberry Pi
+2. Check service: sudo systemctl status bus-agent
+3. View logs: sudo journalctl -u bus-agent -f
+4. Or run manually: cd pi-agent && python run_agent.py
+5. Type 'status' to see pending uploads
+```
+
+#### Manually Upload Scan
+```bash
+# Pi Agent - Manual mode
+1. Run: python run_agent.py
+2. Type employee ID (e.g., 10001)
+3. System records scan with current timestamp
+4. Automatic upload in next sync cycle (60 seconds)
+```
 
 ---
 
@@ -241,7 +481,7 @@ python run_agent.py
 
 ```json
 {
-  "api_base_url": "http://localhost:8000/api/bus",
+  "api_base_url": "http://localhost:8003/api/bus",
   "api_key": "ENTRY_SECRET",
   "upload_interval_seconds": 60
 }
@@ -249,9 +489,11 @@ python run_agent.py
 
 | Field | Description |
 |-------|-------------|
-| `api_base_url` | Backend API endpoint |
-| `api_key` | Authentication key (must match backend config) |
-| `upload_interval_seconds` | How often to upload pending scans |
+| `api_base_url` | Backend API endpoint (should match backend URL) |
+| `api_key` | Authentication key (must match backend API_KEYS config) |
+| `upload_interval_seconds` | How often to upload pending scans (default: 60) |
+
+**Note**: The scanner sits at the factory entry, not per-bus. Bus assignment is derived from employee records in the backend.
 
 ### Backend Environment Variables
 
@@ -266,11 +508,18 @@ DATABASE_URL=sqlite:///./bus_optimizer.db
 # DATABASE_URL=postgresql://username:password@localhost:5432/bus_optimizer
 
 # API Keys (format: LABEL:SECRET_KEY, comma-separated)
+# Labels are descriptive only - all entry scanners share same key
 API_KEYS=ENTRY_GATE:ENTRY_SECRET
 
 # Debug mode (set to false in production)
 DEBUG=true
 ```
+
+**Important Notes:**
+- The `API_KEYS` format is `LABEL:KEY`, where LABEL is descriptive only
+- All entry scanners at the factory gate should use the same API key
+- In development, backend runs on port 8003 (see `run_server.py`)
+- In Docker production, backend runs on port 8000 inside container
 
 ---
 
@@ -286,6 +535,8 @@ Response:
 ```json
 {"status": "healthy"}
 ```
+
+Note: When running in development, backend is at port 8003. In Docker deployment, backend runs on port 8000 inside container, exposed as configured (default 8000).
 
 ### Upload Scans (Entry Scanner → Backend)
 
@@ -324,9 +575,14 @@ GET /api/report/headcount?date=2025-11-28&shift=morning&bus_id=A01
 Query Parameters:
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `date` | No | Date (YYYY-MM-DD); defaults to all |
-| `shift` | No | `morning` or `night` |
+| `date` | No | Single date (YYYY-MM-DD) |
+| `date_from` | No | Start date for range (YYYY-MM-DD) |
+| `date_to` | No | End date for range (YYYY-MM-DD) |
+| `shift` | No | `morning`, `night`, or `unknown` |
 | `bus_id` | No | Filter by bus |
+| `route` | No | Filter by route (substring match) |
+
+Note: Use either `date` for single day, or `date_from`/`date_to` for range. If none specified, returns all dates.
 
 Response:
 ```json
@@ -377,28 +633,65 @@ Response:
 
 ### CSV Exports
 
-- Headcount export (matches `/api/report/headcount` filters):  
-  `GET /api/report/headcount/export?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&shift=morning&bus_id=A01`
-- Attendance export (requires `date`, optional shift/bus):  
-  `GET /api/report/attendance/export?date=YYYY-MM-DD&shift=morning&bus_id=A01`
+The system provides CSV export functionality for both headcount summaries and detailed attendance records.
 
-The web dashboard includes download buttons that pass the current filters to these endpoints.
+**Headcount Export:**
+```
+GET /api/report/headcount/export?date_from=2025-11-01&date_to=2025-11-30&shift=morning&bus_id=A01
+```
+
+Supports same filters as `/api/report/headcount`:
+- `date` - Single date
+- `date_from` / `date_to` - Date range
+- `shift` - morning/night/unknown
+- `bus_id` - Specific bus
+- `route` - Route substring match
+
+**Attendance Export:**
+```
+GET /api/report/attendance/export?date=2025-11-28&shift=morning&bus_id=A01
+```
+
+Requires `date`, optional:
+- `shift` - morning/night/unknown
+- `bus_id` - Specific bus
+- `route` - Route substring match
+
+The web dashboard includes download buttons that automatically pass current filters to these endpoints.
 
 ---
 
 ## Production Deployment
 
+### Port Configuration
+
+The system uses different ports in different environments:
+
+**Development Mode** (using `run_server.py`):
+- Backend API: `http://localhost:8003`
+- Web Dashboard: `http://localhost:5175` (proxies API to 8003)
+
+**Docker Production** (using `docker-compose`):
+- Backend API: `http://localhost:8000` (container internal port 8000, exposed as 8000)
+- Web Dashboard: `http://localhost:5175` (nginx proxies API to backend:8000)
+
+You can customize Docker ports via environment variables in `deployment/.env`:
+```env
+BACKEND_PORT=8000  # External port for backend
+WEB_PORT=5175      # External port for web dashboard
+```
+
 ### Using Docker Compose
 
 ```bash
-cd infra
+cd deployment
 docker-compose up -d
 ```
 
 This starts:
 - PostgreSQL database (port 5432)
-- Backend API (port 8000)
-- Web dashboard (port 80)
+- Backend API (internal port 8000, exposed as 8000 by default)
+- Web dashboard (port 5175 by default, serves on port 80 inside container)
 
 ### Pi Agent as Systemd Service (Raspberry Pi)
 
@@ -406,14 +699,14 @@ Create `/etc/systemd/system/bus-agent.service`:
 
 ```ini
 [Unit]
-Description=Bus Passenger Counter Agent
+Description=Bus System Passenger Counter Agent
 After=network.target
 
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/bus-optimizer/pi-agent
-ExecStart=/home/pi/bus-optimizer/.venv/bin/python run_agent.py
+WorkingDirectory=/home/pi/bus-system/pi-agent
+ExecStart=/home/pi/bus-system/.venv/bin/python run_agent.py
 Restart=always
 RestartSec=10
 Environment=PYTHONUNBUFFERED=1
@@ -474,7 +767,7 @@ Stop-Process -Id <PID> -Force
 
 ## License
 
-Internal use only - Factory Bus Optimization System
+Internal use only - Jabil Factory Bus System
 
 ---
 

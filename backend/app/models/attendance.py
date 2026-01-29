@@ -21,11 +21,16 @@ class Attendance(Base):
     __tablename__ = "attendances"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    scanned_batch_id = Column(Integer, nullable=False, index=True)
+    scanned_batch_id = Column(BigInteger, nullable=False, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
     bus_id = Column(String(10), ForeignKey("buses.bus_id"), nullable=True, index=True)
     van_id = Column(Integer, ForeignKey("vans.id"), nullable=True, index=True)
-    shift = Column(Enum(AttendanceShift), nullable=False, default=AttendanceShift.unknown, index=True)
+    shift = Column(
+        Enum(AttendanceShift, name="attendance_shift", create_type=False),
+        nullable=False,
+        default=AttendanceShift.unknown,
+        index=True,
+    )
     status = Column(String(30), nullable=False, index=True)
     scanned_at = Column(DateTime(timezone=True), nullable=False)
     scanned_on = Column(

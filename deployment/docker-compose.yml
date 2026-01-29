@@ -1,0 +1,88 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: bus-system-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-bus_optimizer}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../backend/init_postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - bus-system-network
+
+  # Backend API
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../deployment/Dockerfile.backend
+    container_name: bus-system-api
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-bus_optimizer}
+      API_KEYS: ${API_KEYS:-ENTRY_GATE:ENTRY_SECRET}
+      DEBUG: ${DEBUG:-false}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - bus-system-network
+
+  # Web Dashboard
+  web:
+    build:
+      context: ../web-dashboard
+      dockerfile: ../deployment/Dockerfile.web
+    container_name: bus-system-web
+    ports:
+      - "${WEB_PORT:-5175}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - bus-system-network
+
+  # Pi Agent (Optional - for containerized deployment)
+  pi-agent:
+    build:
+      context: ..
+      dockerfile: ./deployment/Dockerfile.pi-agent
+    container_name: bus-system-pi-agent
+    environment:
+      API_BASE_URL: ${PI_API_BASE_URL:-http://backend:8000/api/bus}
+      API_KEY: ${PI_API_KEY:-ENTRY_SECRET}
+      UPLOAD_INTERVAL: ${PI_UPLOAD_INTERVAL:-60}
+    volumes:
+      - pi_agent_data:/app/data
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - bus-system-network
+    profiles:
+      - pi-agent  # Only start if explicitly requested
+
+volumes:
+  postgres_data:
+    driver: local
+  pi_agent_data:
+    driver: local
+
+networks:
+  bus-system-network:
+    driver: bridge
+

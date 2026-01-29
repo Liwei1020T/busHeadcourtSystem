@@ -1,5 +1,5 @@
 {
-  "api_base_url": "http://localhost:8000/api/bus",
+  "api_base_url": "http://localhost:8003/api/bus",
   "api_key": "ENTRY_SECRET",
   "upload_interval_seconds": 60,
   "reader_type": "fake"
