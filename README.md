@@ -1048,13 +1048,7 @@ kill -9 <PID>
 
 ## License
 
-Internal use only - Jabil Factory Bus System
-
----
-
-## Support
-
-For issues and feature requests, contact the IT department.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
